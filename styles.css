@@ -580,4 +580,63 @@ body::before{
   color: rgba(255,255,255,0.70);
   font-size: 12px;
 }
+.settings {
+  margin-top: 18px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  text-align: left;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.rangeRow {
+  display: grid;
+  grid-template-columns: 44px 1fr 52px;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.rangeLabel { font-size: 13px; opacity: 0.7; }
+.rangeValue { font-variant-numeric: tabular-nums; text-align: right; opacity: 0.85; }
+
+.note {
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+/* Crosshair (Raw Mouse) */
+.crosshair {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0.95;
+  z-index: 10;
+}
+
+.crosshair::before, .crosshair::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: rgba(255,255,255,0.85);
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+}
+
+.crosshair::before { width: 18px; height: 2px; }
+.crosshair::after  { width: 2px; height: 18px; }
+
+.hidden { display: none; }
 
