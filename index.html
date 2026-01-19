@@ -15,7 +15,6 @@
     <div class="loader__frame">
       <div class="brand">
         <div class="brand__mark" aria-hidden="true">
-          <!-- minimal crosshair -->
           <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
             <circle cx="14" cy="14" r="11" stroke="currentColor" stroke-opacity="0.35" stroke-width="2"/>
             <circle cx="14" cy="14" r="2.5" fill="currentColor" fill-opacity="0.7"/>
@@ -26,7 +25,7 @@
           </svg>
         </div>
         <div class="brand__text">
-          <div class="brand__name">CS Aim Warm‑up</div>
+          <div class="brand__name">CS Aim Warm-up</div>
           <div class="brand__tag">2–3 минуты до катки</div>
         </div>
       </div>
@@ -41,16 +40,58 @@
   <!-- Toast -->
   <div id="toast" class="toast" aria-live="polite"></div>
 
+  <!-- Difficulty Sheet -->
+  <div id="sheetOverlay" class="sheetOverlay hidden" aria-hidden="true">
+    <div class="sheet">
+      <div class="sheet__handle" aria-hidden="true"></div>
+      <div class="sheet__head">
+        <div>
+          <div id="sheetTitle" class="sheet__title">—</div>
+          <div id="sheetSubtitle" class="sheet__sub">—</div>
+        </div>
+        <button id="sheetClose" class="iconBtn" type="button" aria-label="Закрыть">✕</button>
+      </div>
+
+      <div class="sheet__grid">
+        <button class="diffBtn" id="diffEasy">
+          <div class="diffBtn__top">
+            <div class="diffBtn__name">Easy</div>
+            <div id="diffEasyMeta" class="diffBtn__meta">—</div>
+          </div>
+          <div class="diffBtn__desc">Разогрев, комфортный рекорд</div>
+        </button>
+
+        <button class="diffBtn" id="diffMed">
+          <div class="diffBtn__top">
+            <div class="diffBtn__name">Medium</div>
+            <div id="diffMedMeta" class="diffBtn__meta">—</div>
+          </div>
+          <div class="diffBtn__desc">Оптимальная сложность</div>
+        </button>
+
+        <button class="diffBtn" id="diffHard">
+          <div class="diffBtn__top">
+            <div class="diffBtn__name">Hard</div>
+            <div id="diffHardMeta" class="diffBtn__meta">—</div>
+          </div>
+          <div class="diffBtn__desc">Челлендж. Ошибка = поражение</div>
+        </button>
+      </div>
+
+      <div class="sheet__note">
+        Любой промах (клик мимо шара) = поражение. Рекорд сохраняется отдельно по режиму и сложности.
+      </div>
+    </div>
+  </div>
+
   <div id="app" class="app">
     <!-- HOME -->
     <section id="home" class="screen screen--center">
       <header class="homeHeader">
         <div class="homeHeader__brand">
-          <div class="homeHeader__mark" aria-hidden="true">
-            <span class="dot"></span>
-          </div>
+          <div class="homeHeader__mark" aria-hidden="true"><span class="dot"></span></div>
           <div>
-            <div class="homeHeader__title">CS Aim Warm‑up</div>
+            <div class="homeHeader__title">CS Aim Warm-up</div>
             <div class="homeHeader__subtitle">Разминка перед каткой — быстро и чисто</div>
           </div>
         </div>
@@ -71,8 +112,20 @@
             <div class="card__title">Endless</div>
             <div class="chip chip--muted">Рекорд</div>
           </div>
-          <div class="card__text">Челлендж на точность и темп. <b>Промах = конец</b>.</div>
+          <div class="card__text">Классический челлендж. Промах или таймаут = конец.</div>
           <button id="startEndless" class="btn btn--secondary">Стартовать Endless</button>
+        </div>
+
+        <div class="card card--ghost">
+          <div class="card__row">
+            <div class="card__title">Режимы</div>
+            <div class="chip chip--muted">С выбором сложности</div>
+          </div>
+          <div class="card__text">Новые механики. Для рекордов. Везде промах = поражение.</div>
+
+          <button id="modeShrink" class="btn btn--secondary">Shrink Arena</button>
+          <button id="modeFalling" class="btn btn--secondary">Falling</button>
+          <button id="modeFallingShrink" class="btn btn--secondary">Falling + Shrink</button>
         </div>
 
         <div class="statsRow">
@@ -87,7 +140,7 @@
         </div>
 
         <div class="fineprint">
-          Работает в Telegram Mini App • Без аккаунта • Без бэкенда
+          Telegram Mini App • Без аккаунта • Без бэкенда
         </div>
       </main>
     </section>
@@ -95,9 +148,7 @@
     <!-- GAME -->
     <section id="game" class="screen screen--game">
       <header class="gameTop">
-        <button id="quitBtn" class="iconBtn" type="button" aria-label="Закончить">
-          ✕
-        </button>
+        <button id="quitBtn" class="iconBtn" type="button" aria-label="Закончить">✕</button>
 
         <div class="gameTop__center">
           <div id="modePill" class="pill">—</div>
@@ -115,7 +166,6 @@
         <div id="pace" class="pace pace--hidden" aria-hidden="true">
           <div id="paceFill" class="pace__fill"></div>
         </div>
-
         <div class="crosshair" aria-hidden="true"></div>
         <div id="fieldFlash" class="fieldFlash" aria-hidden="true"></div>
       </div>
