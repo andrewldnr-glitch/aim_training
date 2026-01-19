@@ -413,13 +413,24 @@
   });
 
   // Pointer Lock movement (real raw deltas)
-  document.addEventListener("mousemove", (e) => {
-    if (!rawMouse.locked) return;
-    const { w, h } = fieldSize();
-    rawMouse.x = clamp(rawMouse.x + e.movementX * rawSettings.sens, 0, w);
-    rawMouse.y = clamp(rawMouse.y + e.movementY * rawSettings.sens, 0, h);
-    updateCrosshair();
-  });
+ el.playfield.addEventListener("mousemove", (e) => {
+  if (!rawSettings.enabled || rawMouse.locked || !state.running) return;
+
+  const rect = el.playfield.getBoundingClientRect();
+  const { w, h } = fieldSize();
+
+  // курсор внутри playfield (абсолютные координаты)
+  const rx = clamp(e.clientX - rect.left, 0, w);
+  const ry = clamp(e.clientY - rect.top, 0, h);
+
+  // "sens" как масштаб от центра: center + (pos-center)*sens
+  rawMouse.x = clamp((rx - w / 2) * rawSettings.sens + w / 2, 0, w);
+  rawMouse.y = clamp((ry - h / 2) * rawSettings.sens + h / 2, 0, h);
+
+  setCrosshairVisible(true);
+  updateCrosshair();
+});
+
 
   // Fallback: software-raw (если pointer lock недоступен/отключён)
   if (el.playfield) {
