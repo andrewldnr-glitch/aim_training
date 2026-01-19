@@ -1,95 +1,45 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CS Warmup Mini App</title>
+  <title>CS Aim Warm-up</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <div id="app">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🎯</div>
-        <div class="brandtext">
-          <div class="brandtitle">CS Warmup</div>
-          <div class="brandsub">Разминка 3 минуты перед каткой</div>
-        </div>
+
+    <!-- HOME -->
+    <div id="home" class="screen active">
+      <h1>CS Aim Warm-up</h1>
+      <p class="subtitle">Разминка перед каткой</p>
+
+      <button id="startWarmup">Разогреться (3:00)</button>
+      <button id="startEndless" class="secondary">Бесконечный режим</button>
+
+      <div class="streak" id="streak"></div>
+    </div>
+
+    <!-- GAME -->
+    <div id="game" class="screen">
+      <div class="hud">
+        <span id="modeLabel"></span>
+        <span id="timer"></span>
+        <span id="score"></span>
       </div>
-      <button id="btnSettings" class="iconbtn" aria-label="Настройки">⚙️</button>
-    </header>
+      <div id="playfield"></div>
+    </div>
 
-    <main class="main">
-      <section id="screenHome" class="screen">
-        <div class="card">
-          <h1 class="h1">Разогреться для CS</h1>
-          <p class="muted">Флик • Реакция • Трекинг</p>
-          <button id="btnStart" class="primary">Разогреться (3:00)</button>
-          <div class="row">
-            <span id="streak" class="pill">🔥 Streak: 0</span>
-            <span id="last" class="pill">Последний раз: —</span>
-          </div>
-        </div>
+    <!-- RESULT -->
+    <div id="result" class="screen">
+      <h2 id="resultTitle"></h2>
+      <div id="resultStats"></div>
+      <button id="backHome">Ок</button>
+    </div>
 
-        <div class="card">
-          <h2 class="h2">Сегодня</h2>
-          <div class="stats">
-            <div class="stat"><div class="statLabel">Реакция</div><div id="statReaction" class="statValue">—</div></div>
-            <div class="stat"><div class="statLabel">Флик</div><div id="statFlick" class="statValue">—</div></div>
-            <div class="stat"><div class="statLabel">Контроль</div><div id="statTrack" class="statValue">—</div></div>
-          </div>
-        </div>
-      </section>
-
-      <section id="screenPlay" class="screen hidden">
-        <div class="hud">
-          <div class="pill" id="modeName">—</div>
-          <div class="pill" id="timeLeft">3:00</div>
-          <button id="btnExit" class="ghost">Выйти</button>
-        </div>
-        <canvas id="canvas"></canvas>
-        <div class="hint" id="hint">Нажимай по целям</div>
-      </section>
-
-      <section id="screenResult" class="screen hidden">
-        <div class="card">
-          <h1 class="h1">Ты готов играть</h1>
-          <div class="stats">
-            <div class="stat"><div class="statLabel">Реакция (avg)</div><div id="resReaction" class="statValue">—</div></div>
-            <div class="stat"><div class="statLabel">Флик (accuracy)</div><div id="resFlick" class="statValue">—</div></div>
-            <div class="stat"><div class="statLabel">Контроль (time on target)</div><div id="resTrack" class="statValue">—</div></div>
-          </div>
-          <button id="btnGoPlay" class="primary">Я иду играть</button>
-          <button id="btnAgain" class="secondary">Ещё раз</button>
-        </div>
-      </section>
-
-      <section id="screenSettings" class="screen hidden">
-        <div class="card">
-          <h1 class="h1">Настройки</h1>
-          <label class="field">
-            <span>Длительность</span>
-            <select id="duration">
-              <option value="120">2:00</option>
-              <option value="180" selected>3:00</option>
-              <option value="300">5:00</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Звук</span>
-            <input id="sound" type="checkbox" checked />
-          </label>
-          <button id="btnCloseSettings" class="secondary">Закрыть</button>
-        </div>
-      </section>
-    </main>
-
-    <footer class="footer muted">
-      <span>v0.1 • Telegram Mini App</span>
-    </footer>
   </div>
 
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script type="module" src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
