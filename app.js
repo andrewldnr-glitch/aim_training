@@ -272,7 +272,7 @@
   }
 
   /* ==========
-     Small helpers
+     Helpers
      ========== */
   function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
   function fmtTime(sec) {
@@ -312,11 +312,11 @@
   const modeInfo = {
     shrink: {
       title: "Shrink Arena",
-      subtitle: "На экране несколько больших шаров. Они сами уменьшаются — успей нажать до исчезновения.",
+      subtitle: "OSU-like поток целей. Кружки сами уменьшаются — успей нажать до исчезновения.",
       meta: {
-        easy: "3 шара • ~3.2с жизни",
-        med:  "4 шара • ~2.7с жизни",
-        hard: "5 шаров • ~2.3с жизни",
+        easy: "макс 3 • мягкий ритм",
+        med:  "макс 4 • быстрее",
+        hard: "макс 5 • жёстко",
       }
     },
     falling: {
@@ -367,7 +367,7 @@
   });
 
   /* ==========================
-     Sessions: Warmup + Endless
+     Warmup + Endless
      ========================== */
   const WARMUP = {
     totalSec: 180,
@@ -380,30 +380,20 @@
   };
 
   /* ==========================
-     New Modes (Arcade)
-     Правило: любой промах = поражение
+     Arcade Config
      ========================== */
-
-  // Под "реально ставить рекорды" — значит, что темпы не безумные:
-  // hard должен быть сложным, но проходимым и на телефоне.
   const ARCADE = {
-    // Mode 1: Shrink Arena
-    // N шаров одновременно. Каждый шар сам уменьшается.
-    // Если шар исчез (достиг minSize) => поражение.
+    // Shrink Arena: OSU-like stream
     shrink: {
-      easy: { balls: 3, baseSize: 58, minSize: 12, shrinkTimeMs: 3200, respawnDelayMs: 230 },
-      med:  { balls: 4, baseSize: 54, minSize: 12, shrinkTimeMs: 2700, respawnDelayMs: 210 },
-      hard: { balls: 5, baseSize: 50, minSize: 12, shrinkTimeMs: 2300, respawnDelayMs: 190 },
+      easy: { maxActive: 3, baseSize: 58, minSize: 12, shrinkTimeMs: 3200, spawnEveryMs: 650, jitterMs: 260 },
+      med:  { maxActive: 4, baseSize: 54, minSize: 12, shrinkTimeMs: 2700, spawnEveryMs: 520, jitterMs: 210 },
+      hard: { maxActive: 5, baseSize: 50, minSize: 12, shrinkTimeMs: 2300, spawnEveryMs: 430, jitterMs: 180 },
     },
-    // Mode 2: Falling
-    // Шары падают, если коснулись низа => поражение.
     falling: {
       easy: { maxActive: 6,  size: 36, spawnEveryMs: 600, fallSpeed: 0.24 },
       med:  { maxActive: 10, size: 34, spawnEveryMs: 470, fallSpeed: 0.32 },
       hard: { maxActive: 15, size: 32, spawnEveryMs: 380, fallSpeed: 0.40 },
     },
-    // Mode 3: Falling + Shrink
-    // Падают и уменьшаются одновременно. Исчез или упал => поражение.
     fallshrink: {
       easy: { maxActive: 6,  baseSize: 40, minSize: 12, shrinkTimeMs: 2600, spawnEveryMs: 650, fallSpeed: 0.20 },
       med:  { maxActive: 10, baseSize: 38, minSize: 12, shrinkTimeMs: 2200, spawnEveryMs: 520, fallSpeed: 0.27 },
@@ -449,10 +439,29 @@
     objects: [],
     arcadeRaf: null,
     lastArcade: 0,
-    spawnTimer: null,
+
+    // spawn scheduler can be interval or timeout
+    spawnJob: null, // { id, type: "interval" | "timeout" }
   };
 
   let tickId = null;
+
+  function clearSpawnJob() {
+    if (!state.spawnJob) return;
+    if (state.spawnJob.type === "interval") clearInterval(state.spawnJob.id);
+    else clearTimeout(state.spawnJob.id);
+    state.spawnJob = null;
+  }
+
+  function setSpawnTimeout(fn, ms) {
+    clearSpawnJob();
+    state.spawnJob = { id: setTimeout(fn, ms), type: "timeout" };
+  }
+
+  function setSpawnInterval(fn, ms) {
+    clearSpawnJob();
+    state.spawnJob = { id: setInterval(fn, ms), type: "interval" };
+  }
 
   function clearTimers() {
     if (tickId) { clearInterval(tickId); tickId = null; }
@@ -460,7 +469,7 @@
     if (state.spawnDelayId) { clearTimeout(state.spawnDelayId); state.spawnDelayId = null; }
     if (state.rafId) { cancelAnimationFrame(state.rafId); state.rafId = null; }
     if (state.arcadeRaf) { cancelAnimationFrame(state.arcadeRaf); state.arcadeRaf = null; }
-    if (state.spawnTimer) { clearInterval(state.spawnTimer); state.spawnTimer = null; }
+    clearSpawnJob();
   }
 
   function clearTarget() {
@@ -672,7 +681,6 @@
   /* ==========================
      Arcade object engine
      ========================== */
-
   function makeBall({ x, y, size, vy = 0, shrinkTimeMs = 0, minSize = 0, kind }) {
     const b = document.createElement("div");
     b.className = "target";
@@ -718,19 +726,10 @@
     playHitSound();
     Haptic.light();
 
-    // В новых режимах клик по шару = remove + score
+    // В arcade-режимах: 1 клик = убрать цель + очко
     removeBall(obj);
     state.hits += 1;
     el.score.textContent = `Score ${state.hits}`;
-
-    // Для Shrink Arena: держим постоянное число шаров — спавним замену с небольшой задержкой
-    if (state.mode === "shrink") {
-      const p = ARCADE.shrink[state.diff];
-      setTimeout(() => {
-        if (!state.running || state.mode !== "shrink") return;
-        spawnShrinkBall();
-      }, p.respawnDelayMs);
-    }
   }
 
   function arcadeDefeat(reason) {
@@ -747,22 +746,68 @@
     else endSession("Поражение");
   }
 
-  /* ---- Mode 1: Shrink Arena ---- */
+  /* ==========================
+     Shrink Arena (OSU-like stream)
+     ========================== */
+
+  // Позиции "как osu": не спавним слишком близко к другим целям.
+  function pickOsuPos(size) {
+    const { w, h } = fieldSize();
+    const margin = 6;
+    const tries = 14;
+
+    let best = { x: margin, y: margin, score: -1 };
+
+    const alive = state.objects.filter(o => o.alive);
+    const minAllowed = size * 1.05;
+
+    for (let i = 0; i < tries; i++) {
+      const x = margin + Math.random() * Math.max(0, (w - size - margin * 2));
+      const y = margin + Math.random() * Math.max(0, (h - size - margin * 2));
+
+      const cx = x + size / 2;
+      const cy = y + size / 2;
+
+      let nearest = Infinity;
+      for (const o of alive) {
+        const ocx = o.x + o.size / 2;
+        const ocy = o.y + o.size / 2;
+        const d = Math.hypot(cx - ocx, cy - ocy);
+        nearest = Math.min(nearest, d);
+      }
+
+      const score = alive.length ? nearest : 99999;
+
+      if (score > best.score) best = { x, y, score };
+      if (score >= minAllowed) return { x, y };
+    }
+
+    return { x: best.x, y: best.y };
+  }
+
   function spawnShrinkBall() {
     const p = ARCADE.shrink[state.diff];
-    const { w, h } = fieldSize();
-
     const size = p.baseSize;
-    const x = Math.random() * Math.max(0, w - size);
-    const y = Math.random() * Math.max(0, h - size);
+
+    const pos = pickOsuPos(size);
 
     const obj = makeBall({
-      x, y,
+      x: pos.x,
+      y: pos.y,
       size,
       vy: 0,
       shrinkTimeMs: p.shrinkTimeMs,
       minSize: p.minSize,
       kind: "shrink"
+    });
+
+    // мягкий “pop-in”
+    obj.el.style.opacity = "0";
+    obj.el.style.transform = "scale(0.92)";
+    obj.el.style.transition = "opacity 120ms ease, transform 120ms ease";
+    requestAnimationFrame(() => {
+      obj.el.style.opacity = "1";
+      obj.el.style.transform = "scale(1)";
     });
 
     state.objects.push(obj);
@@ -789,13 +834,30 @@
     setHeaderUI();
 
     const p = ARCADE.shrink[diff];
-    setHint("Шары уменьшаются сами. Успей нажать до исчезновения. Любой промах = поражение.");
+    setHint("OSU-стрим: цели появляются постепенно. Успей нажать до исчезновения. Промах = поражение.");
 
-    // initial spawn
-    for (let i = 0; i < p.balls; i++) spawnShrinkBall();
+    // Поток спавна: живой ритм (jitter + иногда быстрая пара)
+    const scheduleNext = () => {
+      if (!state.running || state.mode !== "shrink") return;
 
+      const aliveCount = state.objects.filter(o => o.alive).length;
+      if (aliveCount < p.maxActive) spawnShrinkBall();
+
+      const jitter = (Math.random() * 2 - 1) * p.jitterMs;
+      let next = Math.max(140, p.spawnEveryMs + jitter);
+
+      // шанс на быструю “двойку”
+      if (Math.random() < 0.12) next *= 0.62;
+
+      setSpawnTimeout(scheduleNext, next);
+    };
+
+    // стартовая пауза
+    setSpawnTimeout(scheduleNext, 220);
+
+    // RAF: shrink + check (исчез = поражение)
     state.lastArcade = performance.now();
-    state.arcadeRaf = requestAnimationFrame(function loop(now){
+    state.arcadeRaf = requestAnimationFrame(function loop(now) {
       if (!state.running || state.mode !== "shrink") return;
       const dt = now - state.lastArcade;
       state.lastArcade = now;
@@ -805,7 +867,6 @@
       for (const obj of state.objects) {
         if (!obj.alive) continue;
 
-        // auto-shrink
         if (obj.shrinkRate > 0) {
           const old = obj.size;
           const next = old - obj.shrinkRate * dt;
@@ -816,13 +877,13 @@
             return;
           }
 
-          // keep center while shrinking
           const delta = old - next;
           obj.size = next;
+
+          // держим центр при shrink
           obj.x += delta / 2;
           obj.y += delta / 2;
 
-          // clamp inside playfield
           obj.x = clamp(obj.x, 0, Math.max(0, w - obj.size));
           obj.y = clamp(obj.y, 0, Math.max(0, h - obj.size));
 
@@ -838,7 +899,9 @@
     });
   }
 
-  /* ---- Mode 2: Falling ---- */
+  /* ==========================
+     Falling
+     ========================== */
   function spawnFallingBall() {
     const p = ARCADE.falling[state.diff];
     const { w } = fieldSize();
@@ -882,7 +945,7 @@
     const p = ARCADE.falling[diff];
     setHint(`Сбей шар до падения. Макс на экране: ${p.maxActive}. Любой промах = поражение.`);
 
-    state.spawnTimer = setInterval(() => {
+    setSpawnInterval(() => {
       if (!state.running || state.mode !== "falling") return;
       const alive = state.objects.filter(o => o.alive).length;
       if (alive < p.maxActive) spawnFallingBall();
@@ -914,7 +977,9 @@
     });
   }
 
-  /* ---- Mode 3: Falling + Shrink ---- */
+  /* ==========================
+     Falling + Shrink
+     ========================== */
   function spawnFallingShrinkBall() {
     const p = ARCADE.fallshrink[state.diff];
     const { w } = fieldSize();
@@ -956,9 +1021,9 @@
     setHeaderUI();
 
     const p = ARCADE.fallshrink[diff];
-    setHint(`Падают и уменьшаются. Успей нажать до исчезновения/падения. Любой промах = поражение.`);
+    setHint("Падают и уменьшаются. Успей нажать до исчезновения/падения. Любой промах = поражение.");
 
-    state.spawnTimer = setInterval(() => {
+    setSpawnInterval(() => {
       if (!state.running || state.mode !== "fallshrink") return;
       const alive = state.objects.filter(o => o.alive).length;
       if (alive < p.maxActive) spawnFallingShrinkBall();
@@ -992,13 +1057,11 @@
           const delta = old - next;
           obj.size = next;
 
-          // keep center while shrinking
           obj.x += delta / 2;
           obj.y += delta / 2;
 
           obj.x = clamp(obj.x, 0, Math.max(0, w - obj.size));
-          // y can be negative while above top
-          obj.y = clamp(obj.y, -obj.size - 60, Math.max(0, h - obj.size));
+          obj.y = clamp(obj.y, -obj.size - 80, Math.max(0, h - obj.size));
 
           obj.el.style.width = `${obj.size}px`;
           obj.el.style.height = `${obj.size}px`;
@@ -1303,7 +1366,7 @@
   function startPendingDiff(diff) {
     if (!pendingMode) return;
     ensureAudio();
-    const mode = pendingMode; // preserve before close
+    const mode = pendingMode;
     closeSheet();
 
     requestAnimationFrame(() => {
@@ -1323,7 +1386,6 @@
   window.addEventListener("resize", () => {
     if (!state.running) return;
 
-    // Arcade: clamp objects into bounds (avoid offscreen after rotate)
     if (state.mode === "shrink" || state.mode === "falling" || state.mode === "fallshrink") {
       const { w, h } = fieldSize();
       for (const obj of state.objects) {
@@ -1336,7 +1398,6 @@
       return;
     }
 
-    // Warmup/Endless: respawn target
     if (state.mode === "warmup") {
       const ph = currentPhase();
       if (!ph) return;
