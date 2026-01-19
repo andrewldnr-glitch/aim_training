@@ -1,60 +1,143 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
   <title>CS Aim Warm-up</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
 
-  <!-- LOADER OVERLAY -->
-  <div id="loader" class="loader">
-    <div class="loader-card">
-      <div class="loader-title">CS Aim Warm-up</div>
-      <div class="loader-subtitle">Загрузка…</div>
-
-      <div class="progress">
-        <div id="progressBar" class="progress-bar"></div>
+  <!-- LOADER OVERLAY (always 2.5s) -->
+  <div id="loader" class="loader" aria-hidden="false">
+    <div class="loader__frame">
+      <div class="brand">
+        <div class="brand__mark" aria-hidden="true">
+          <!-- minimal crosshair -->
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <circle cx="14" cy="14" r="11" stroke="currentColor" stroke-opacity="0.35" stroke-width="2"/>
+            <circle cx="14" cy="14" r="2.5" fill="currentColor" fill-opacity="0.7"/>
+            <path d="M14 2V7" stroke="currentColor" stroke-opacity="0.55" stroke-width="2" stroke-linecap="round"/>
+            <path d="M14 21V26" stroke="currentColor" stroke-opacity="0.55" stroke-width="2" stroke-linecap="round"/>
+            <path d="M2 14H7" stroke="currentColor" stroke-opacity="0.55" stroke-width="2" stroke-linecap="round"/>
+            <path d="M21 14H26" stroke="currentColor" stroke-opacity="0.55" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="brand__text">
+          <div class="brand__name">CS Aim Warm‑up</div>
+          <div class="brand__tag">2–3 минуты до катки</div>
+        </div>
       </div>
 
-      <div id="progressText" class="progress-text">0%</div>
+      <div class="loader__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div id="loaderBar" class="loader__barFill"></div>
+      </div>
+      <div id="loaderPct" class="loader__pct">0%</div>
     </div>
   </div>
 
-  <div id="app">
+  <!-- Toast -->
+  <div id="toast" class="toast" aria-live="polite"></div>
 
+  <div id="app" class="app">
     <!-- HOME -->
-    <div id="home" class="screen">
-      <h1>CS Aim Warm-up</h1>
-      <p class="subtitle">Разминка перед каткой</p>
+    <section id="home" class="screen screen--center">
+      <header class="homeHeader">
+        <div class="homeHeader__brand">
+          <div class="homeHeader__mark" aria-hidden="true">
+            <span class="dot"></span>
+          </div>
+          <div>
+            <div class="homeHeader__title">CS Aim Warm‑up</div>
+            <div class="homeHeader__subtitle">Разминка перед каткой — быстро и чисто</div>
+          </div>
+        </div>
+      </header>
 
-      <button id="startWarmup">Разогреться (3:00)</button>
-      <button id="startEndless" class="secondary">Бесконечный режим</button>
+      <main class="stack">
+        <div class="card">
+          <div class="card__row">
+            <div class="card__title">Разминка</div>
+            <div class="chip">3:00</div>
+          </div>
+          <div class="card__text">Reaction → Flick → Control. Мягкий режим: <b>3 жизни</b>.</div>
+          <button id="startWarmup" class="btn btn--primary">Начать разминку</button>
+        </div>
 
-      <div class="streak" id="streak"></div>
-      <div class="best" id="best"></div>
-    </div>
+        <div class="card card--ghost">
+          <div class="card__row">
+            <div class="card__title">Endless</div>
+            <div class="chip chip--muted">Рекорд</div>
+          </div>
+          <div class="card__text">Челлендж на точность и темп. <b>Промах = конец</b>.</div>
+          <button id="startEndless" class="btn btn--secondary">Стартовать Endless</button>
+        </div>
+
+        <div class="statsRow">
+          <div class="stat">
+            <div class="stat__label">Streak</div>
+            <div id="streak" class="stat__value">—</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label">Best (Endless)</div>
+            <div id="best" class="stat__value">—</div>
+          </div>
+        </div>
+
+        <div class="fineprint">
+          Работает в Telegram Mini App • Без аккаунта • Без бэкенда
+        </div>
+      </main>
+    </section>
 
     <!-- GAME -->
-    <div id="game" class="screen">
-      <div class="hud">
-        <span id="modeLabel">—</span>
-        <span id="timer"> </span>
-        <span id="score"> </span>
+    <section id="game" class="screen screen--game">
+      <header class="gameTop">
+        <button id="quitBtn" class="iconBtn" type="button" aria-label="Закончить">
+          ✕
+        </button>
+
+        <div class="gameTop__center">
+          <div id="modePill" class="pill">—</div>
+          <div id="phasePill" class="pill pill--muted">—</div>
+        </div>
+
+        <div class="gameTop__right">
+          <div id="lives" class="lives" aria-label="Lives"></div>
+          <div id="timer" class="mono timer"> </div>
+          <div id="score" class="mono score"> </div>
+        </div>
+      </header>
+
+      <div id="playfield" class="playfield" aria-label="Playfield">
+        <div id="pace" class="pace pace--hidden" aria-hidden="true">
+          <div id="paceFill" class="pace__fill"></div>
+        </div>
+
+        <div class="crosshair" aria-hidden="true"></div>
+        <div id="fieldFlash" class="fieldFlash" aria-hidden="true"></div>
       </div>
-      <div id="playfield" aria-label="Playfield"></div>
-      <div class="hint">Промах = конец</div>
-    </div>
+
+      <div id="hint" class="hint"> </div>
+    </section>
 
     <!-- RESULT -->
-    <div id="result" class="screen">
-      <h2 id="resultTitle"></h2>
-      <div id="resultStats" class="result-stats"></div>
-      <button id="backHome">На главную</button>
-    </div>
+    <section id="result" class="screen screen--center">
+      <header class="resultHeader">
+        <div id="resultTitle" class="resultTitle">—</div>
+        <div id="resultSubtitle" class="resultSubtitle"> </div>
+      </header>
 
+      <div id="resultStats" class="resultStats"></div>
+
+      <div class="resultActions">
+        <button id="replayBtn" class="btn btn--primary">Повторить</button>
+        <button id="homeBtn" class="btn btn--secondary">На главную</button>
+        <button id="closeBtn" class="btn btn--ghost" type="button">Закрыть</button>
+      </div>
+    </section>
   </div>
 
   <script src="app.js"></script>
