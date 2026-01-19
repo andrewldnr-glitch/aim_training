@@ -359,6 +359,9 @@ input[type="range"]{
   box-shadow: var(--shadow);
   overflow: hidden;
 }
+.playfield.rawAim { 
+  cursor: none; 
+}
 
 /* subtle grid */
 .playfield::before{
