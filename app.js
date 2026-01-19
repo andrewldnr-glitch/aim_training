@@ -7,13 +7,9 @@
   const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
 
   function tgSafe(fn, ...args) {
-    try {
-      if (!tg) return;
-      if (typeof fn === "function") fn(...args);
-    } catch (_) {}
+    try { if (tg && typeof fn === "function") fn(...args); } catch (_) {}
   }
 
-  // Make it feel native inside Telegram
   if (tg) {
     tgSafe(tg.ready.bind(tg));
     tgSafe(tg.expand.bind(tg));
@@ -37,6 +33,21 @@
 
     startWarmup: $("startWarmup"),
     startEndless: $("startEndless"),
+
+    modeShrink: $("modeShrink"),
+    modeFalling: $("modeFalling"),
+    modeFallingShrink: $("modeFallingShrink"),
+
+    sheetOverlay: $("sheetOverlay"),
+    sheetClose: $("sheetClose"),
+    sheetTitle: $("sheetTitle"),
+    sheetSubtitle: $("sheetSubtitle"),
+    diffEasy: $("diffEasy"),
+    diffMed: $("diffMed"),
+    diffHard: $("diffHard"),
+    diffEasyMeta: $("diffEasyMeta"),
+    diffMedMeta: $("diffMedMeta"),
+    diffHardMeta: $("diffHardMeta"),
 
     playfield: $("playfield"),
     pace: $("pace"),
@@ -66,7 +77,7 @@
   const screens = [el.home, el.game, el.result];
 
   function showScreen(node) {
-    for (const s of screens) s.classList.remove("active");
+    screens.forEach(s => s.classList.remove("active"));
     node.classList.add("active");
   }
 
@@ -80,29 +91,17 @@
     const r = parseInt(h.slice(0, 2), 16);
     const g = parseInt(h.slice(2, 4), 16);
     const b = parseInt(h.slice(4, 6), 16);
-    if ([r, g, b].some((v) => Number.isNaN(v))) return null;
+    if ([r, g, b].some(Number.isNaN)) return null;
     return { r, g, b };
   }
 
   function applyTelegramTheme() {
     if (!tg || !tg.themeParams) return;
-
     const root = document.documentElement;
-    const p = tg.themeParams;
-
-    // Prefer Telegram button color as accent if it looks valid.
-    const rgb = hexToRgb(p.button_color);
+    const rgb = hexToRgb(tg.themeParams.button_color);
     if (rgb) {
-      root.style.setProperty("--accent", p.button_color);
+      root.style.setProperty("--accent", tg.themeParams.button_color);
       root.style.setProperty("--accentRgb", `${rgb.r}, ${rgb.g}, ${rgb.b}`);
-    }
-
-    // Optional: align Telegram container colors (best effort)
-    if (typeof tg.setBackgroundColor === "function" && p.bg_color) {
-      tgSafe(tg.setBackgroundColor.bind(tg), p.bg_color);
-    }
-    if (typeof tg.setHeaderColor === "function" && p.secondary_bg_color) {
-      tgSafe(tg.setHeaderColor.bind(tg), p.secondary_bg_color);
     }
   }
 
@@ -110,7 +109,6 @@
      Toast
      ========== */
   let toastTimer = null;
-
   function toast(msg) {
     if (!msg) return;
     el.toast.textContent = msg;
@@ -140,15 +138,11 @@
 
   function ensureAudio() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") {
-      audioCtx.resume().catch(() => {});
-    }
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
   }
 
   function playHitSound() {
     ensureAudio();
-    if (!audioCtx) return;
-
     const now = audioCtx.currentTime;
 
     const gain = audioCtx.createGain();
@@ -170,16 +164,12 @@
     o2.connect(gain);
     gain.connect(audioCtx.destination);
 
-    o1.start(now);
-    o2.start(now);
-    o1.stop(now + 0.11);
-    o2.stop(now + 0.11);
+    o1.start(now); o2.start(now);
+    o1.stop(now + 0.11); o2.stop(now + 0.11);
   }
 
   function playMissSound() {
     ensureAudio();
-    if (!audioCtx) return;
-
     const now = audioCtx.currentTime;
 
     const gain = audioCtx.createGain();
@@ -194,7 +184,6 @@
 
     o.connect(gain);
     gain.connect(audioCtx.destination);
-
     o.start(now);
     o.stop(now + 0.15);
   }
@@ -207,14 +196,10 @@
       try {
         const v = localStorage.getItem(key);
         return v === null ? fallback : v;
-      } catch (_) {
-        return fallback;
-      }
+      } catch { return fallback; }
     },
     set(key, value) {
-      try {
-        localStorage.setItem(key, value);
-      } catch (_) {}
+      try { localStorage.setItem(key, value); } catch {}
     }
   };
 
@@ -224,6 +209,10 @@
     lastTrainingDay: "csaim.lastTrainingDay",
   };
 
+  function bestKey(mode, diff) {
+    return `csaim.best.${mode}.${diff}`;
+  }
+
   function dayKey(d = new Date()) {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -232,13 +221,11 @@
   }
 
   function diffDays(aKey, bKey) {
-    // local date diff in days (approx reliable for our use)
     const [ay, am, ad] = aKey.split("-").map(Number);
     const [by, bm, bd] = bKey.split("-").map(Number);
     const a = new Date(ay, am - 1, ad);
     const b = new Date(by, bm - 1, bd);
-    const ms = b - a;
-    return Math.round(ms / (24 * 60 * 60 * 1000));
+    return Math.round((b - a) / (24 * 60 * 60 * 1000));
   }
 
   function markTrainingComplete() {
@@ -247,13 +234,8 @@
     let streak = Number(store.get(KEYS.streak, "0"));
 
     if (last === today) return;
-
-    if (!last) {
-      streak = 1;
-    } else {
-      const d = diffDays(last, today);
-      streak = (d === 1) ? (streak + 1) : 1;
-    }
+    if (!last) streak = 1;
+    else streak = (diffDays(last, today) === 1) ? (streak + 1) : 1;
 
     store.set(KEYS.lastTrainingDay, today);
     store.set(KEYS.streak, String(streak));
@@ -270,21 +252,15 @@
      Loader (2.5s)
      ========== */
   function runLoader(ms = 2500) {
-    // start hidden app (but loader overlay covers anyway)
     const start = performance.now();
-
     function tick(now) {
       const t = Math.min(1, (now - start) / ms);
       const pct = Math.round(t * 100);
-
       el.loaderBar.style.width = `${pct}%`;
       el.loaderPct.textContent = `${pct}%`;
-      el.loader.querySelector(".loader__bar")?.setAttribute("aria-valuenow", String(pct));
 
-      if (t < 1) {
-        requestAnimationFrame(tick);
-      } else {
-        // fade out loader
+      if (t < 1) requestAnimationFrame(tick);
+      else {
         el.loader.classList.add("done");
         setTimeout(() => {
           el.loader.style.display = "none";
@@ -292,23 +268,12 @@
         }, 240);
       }
     }
-
     requestAnimationFrame(tick);
   }
 
   /* ==========
-     Game: config
+     Small helpers
      ========== */
-  const WARMUP = {
-    totalSec: 180,   // 3:00
-    lives: 3,
-    phases: [
-      { key: "reaction", label: "Reaction", sec: 45, size: 34, lifetimeMs: 1300, delayMin: 360, delayMax: 920, moving: false },
-      { key: "flick",    label: "Flick",    sec: 70, size: 28, lifetimeMs: 1600, delayMin: 0,   delayMax: 0,   moving: false },
-      { key: "control",  label: "Control",  sec: 65, size: 28, lifetimeMs: 0,    delayMin: 0,   delayMax: 0,   moving: true,  speed: 0.22 },
-    ]
-  };
-
   function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
   function fmtTime(sec) {
     const m = Math.floor(sec / 60);
@@ -316,62 +281,9 @@
     return `${m}:${String(s).padStart(2,"0")}`;
   }
 
-  /* ==========
-     Game: runtime state
-     ========== */
-  const state = {
-    mode: null, // "warmup" | "endless"
-    running: false,
-
-    // warmup time
-    totalLeft: 0,
-    phaseIndex: 0,
-    phaseLeft: 0,
-
-    // lives
-    lives: 0,
-
-    // stats
-    hits: 0,
-    misses: 0,
-    reactionMs: [],
-    flickMs: [],
-    controlHits: 0,
-
-    // target
-    targetEl: null,
-    spawnedAt: 0,
-    targetLifeId: null,
-    spawnDelayId: null,
-
-    // moving
-    rafId: null,
-    lastRaf: 0,
-    vel: { x: 0, y: 0 },
-
-    // endless pacing
-    paceId: null,
-  };
-
-  let tickId = null;
-
-  function clearTimers() {
-    if (tickId) { clearInterval(tickId); tickId = null; }
-    if (state.targetLifeId) { clearTimeout(state.targetLifeId); state.targetLifeId = null; }
-    if (state.spawnDelayId) { clearTimeout(state.spawnDelayId); state.spawnDelayId = null; }
-    if (state.paceId) { clearTimeout(state.paceId); state.paceId = null; }
-    if (state.rafId) { cancelAnimationFrame(state.rafId); state.rafId = null; }
-  }
-
-  function clearTarget() {
-    if (state.targetEl) {
-      state.targetEl.remove();
-      state.targetEl = null;
-    }
-  }
-
-  function setHint(text) {
-    el.hint.textContent = text || "";
+  function fieldSize() {
+    const r = el.playfield.getBoundingClientRect();
+    return { w: r.width, h: r.height };
   }
 
   function setPaceHidden(hidden) {
@@ -379,12 +291,9 @@
   }
 
   function animatePace(ms) {
-    // visual pacing bar for Endless (time-to-hit)
     setPaceHidden(false);
-
     el.paceFill.style.transition = "none";
     el.paceFill.style.width = "100%";
-    // force reflow
     el.paceFill.offsetHeight;
     el.paceFill.style.transition = `width ${ms}ms linear`;
     el.paceFill.style.width = "0%";
@@ -397,6 +306,177 @@
     setTimeout(() => { el.playfield.classList.remove("shake"); }, 240);
   }
 
+  /* ==========================
+     Difficulty Sheet
+     ========================== */
+  const modeInfo = {
+    shrink: {
+      title: "Shrink Arena",
+      subtitle: "На экране несколько больших шаров. Они сами уменьшаются — успей нажать до исчезновения.",
+      meta: {
+        easy: "3 шара • ~3.2с жизни",
+        med:  "4 шара • ~2.7с жизни",
+        hard: "5 шаров • ~2.3с жизни",
+      }
+    },
+    falling: {
+      title: "Falling",
+      subtitle: "Шары падают сверху вниз. Успей нажать до нижней границы.",
+      meta: {
+        easy: "до 6 • темп ×1.0",
+        med:  "до 10 • темп ×1.25",
+        hard: "до 15 • темп ×1.55",
+      }
+    },
+    fallshrink: {
+      title: "Falling + Shrink",
+      subtitle: "Падают и одновременно уменьшаются. Успей нажать до исчезновения или падения.",
+      meta: {
+        easy: "до 6 • shrink мягкий",
+        med:  "до 10 • shrink быстрее",
+        hard: "до 15 • shrink жёсткий",
+      }
+    }
+  };
+
+  let pendingMode = null;
+
+  function openSheet(modeKey) {
+    pendingMode = modeKey;
+    const info = modeInfo[modeKey];
+
+    el.sheetTitle.textContent = info.title;
+    el.sheetSubtitle.textContent = info.subtitle;
+    el.diffEasyMeta.textContent = info.meta.easy;
+    el.diffMedMeta.textContent = info.meta.med;
+    el.diffHardMeta.textContent = info.meta.hard;
+
+    el.sheetOverlay.classList.remove("hidden");
+    el.sheetOverlay.setAttribute("aria-hidden", "false");
+  }
+
+  function closeSheet() {
+    el.sheetOverlay.classList.add("hidden");
+    el.sheetOverlay.setAttribute("aria-hidden", "true");
+    pendingMode = null;
+  }
+
+  el.sheetClose.addEventListener("click", closeSheet);
+  el.sheetOverlay.addEventListener("click", (e) => {
+    if (e.target === el.sheetOverlay) closeSheet();
+  });
+
+  /* ==========================
+     Sessions: Warmup + Endless
+     ========================== */
+  const WARMUP = {
+    totalSec: 180,
+    lives: 3,
+    phases: [
+      { key: "reaction", label: "Reaction", sec: 45, size: 34, lifetimeMs: 1300, delayMin: 360, delayMax: 920, moving: false },
+      { key: "flick",    label: "Flick",    sec: 70, size: 28, lifetimeMs: 1600, delayMin: 0,   delayMax: 0,   moving: false },
+      { key: "control",  label: "Control",  sec: 65, size: 28, lifetimeMs: 0,    delayMin: 0,   delayMax: 0,   moving: true,  speed: 0.22 },
+    ]
+  };
+
+  /* ==========================
+     New Modes (Arcade)
+     Правило: любой промах = поражение
+     ========================== */
+
+  // Под "реально ставить рекорды" — значит, что темпы не безумные:
+  // hard должен быть сложным, но проходимым и на телефоне.
+  const ARCADE = {
+    // Mode 1: Shrink Arena
+    // N шаров одновременно. Каждый шар сам уменьшается.
+    // Если шар исчез (достиг minSize) => поражение.
+    shrink: {
+      easy: { balls: 3, baseSize: 58, minSize: 12, shrinkTimeMs: 3200, respawnDelayMs: 230 },
+      med:  { balls: 4, baseSize: 54, minSize: 12, shrinkTimeMs: 2700, respawnDelayMs: 210 },
+      hard: { balls: 5, baseSize: 50, minSize: 12, shrinkTimeMs: 2300, respawnDelayMs: 190 },
+    },
+    // Mode 2: Falling
+    // Шары падают, если коснулись низа => поражение.
+    falling: {
+      easy: { maxActive: 6,  size: 36, spawnEveryMs: 600, fallSpeed: 0.24 },
+      med:  { maxActive: 10, size: 34, spawnEveryMs: 470, fallSpeed: 0.32 },
+      hard: { maxActive: 15, size: 32, spawnEveryMs: 380, fallSpeed: 0.40 },
+    },
+    // Mode 3: Falling + Shrink
+    // Падают и уменьшаются одновременно. Исчез или упал => поражение.
+    fallshrink: {
+      easy: { maxActive: 6,  baseSize: 40, minSize: 12, shrinkTimeMs: 2600, spawnEveryMs: 650, fallSpeed: 0.20 },
+      med:  { maxActive: 10, baseSize: 38, minSize: 12, shrinkTimeMs: 2200, spawnEveryMs: 520, fallSpeed: 0.27 },
+      hard: { maxActive: 15, baseSize: 36, minSize: 12, shrinkTimeMs: 1900, spawnEveryMs: 440, fallSpeed: 0.34 },
+    }
+  };
+
+  /* ==========================
+     Runtime state
+     ========================== */
+  const state = {
+    mode: null,        // warmup | endless | shrink | falling | fallshrink
+    diff: null,        // easy | med | hard
+    running: false,
+
+    // warmup
+    totalLeft: 0,
+    phaseIndex: 0,
+    phaseLeft: 0,
+    lives: 0,
+
+    // common stats
+    hits: 0,
+    misses: 0,
+
+    // warmup stats
+    reactionMs: [],
+    flickMs: [],
+    controlHits: 0,
+
+    // warmup target
+    targetEl: null,
+    spawnedAt: 0,
+    targetLifeId: null,
+    spawnDelayId: null,
+
+    // warmup moving
+    rafId: null,
+    lastRaf: 0,
+    vel: { x: 0, y: 0 },
+
+    // arcade objects
+    objects: [],
+    arcadeRaf: null,
+    lastArcade: 0,
+    spawnTimer: null,
+  };
+
+  let tickId = null;
+
+  function clearTimers() {
+    if (tickId) { clearInterval(tickId); tickId = null; }
+    if (state.targetLifeId) { clearTimeout(state.targetLifeId); state.targetLifeId = null; }
+    if (state.spawnDelayId) { clearTimeout(state.spawnDelayId); state.spawnDelayId = null; }
+    if (state.rafId) { cancelAnimationFrame(state.rafId); state.rafId = null; }
+    if (state.arcadeRaf) { cancelAnimationFrame(state.arcadeRaf); state.arcadeRaf = null; }
+    if (state.spawnTimer) { clearInterval(state.spawnTimer); state.spawnTimer = null; }
+  }
+
+  function clearTarget() {
+    if (state.targetEl) {
+      state.targetEl.remove();
+      state.targetEl = null;
+    }
+  }
+
+  function clearArcadeObjects() {
+    for (const o of state.objects) o.el?.remove();
+    state.objects = [];
+  }
+
+  function setHint(text) { el.hint.textContent = text || ""; }
+
   function renderLives() {
     el.lives.innerHTML = "";
     for (let i = 0; i < WARMUP.lives; i++) {
@@ -407,63 +487,63 @@
   }
 
   function setHeaderUI() {
-    if (state.mode === "warmup") {
-      el.modePill.textContent = "Warm‑up";
+    const isWarmup = state.mode === "warmup";
+    const isEndless = state.mode === "endless";
+    const isArcade = state.mode === "shrink" || state.mode === "falling" || state.mode === "fallshrink";
+
+    if (isWarmup) {
+      el.modePill.textContent = "Warm-up";
       el.phasePill.style.display = "inline-flex";
       el.timer.style.display = "inline-flex";
       el.score.style.display = "inline-flex";
-
       el.timer.textContent = fmtTime(state.totalLeft);
       el.score.textContent = `Hits ${state.hits}`;
-
-      const phase = WARMUP.phases[state.phaseIndex];
-      el.phasePill.textContent = phase ? phase.label : "—";
-
       renderLives();
       setPaceHidden(true);
-    } else {
+      return;
+    }
+
+    if (isEndless) {
       el.modePill.textContent = "Endless";
       el.phasePill.style.display = "none";
       el.timer.style.display = "none";
       el.score.style.display = "inline-flex";
-
       el.score.textContent = `Score ${state.hits}`;
-      el.lives.innerHTML = ""; // endless has no lives
+      el.lives.innerHTML = "";
       setPaceHidden(false);
+      return;
+    }
+
+    if (isArcade) {
+      const nice =
+        state.mode === "shrink" ? "Shrink" :
+        state.mode === "falling" ? "Falling" :
+        "Fall+Shrink";
+
+      const d = state.diff ? state.diff.toUpperCase() : "";
+      el.modePill.textContent = `${nice} ${d}`;
+      el.phasePill.style.display = "none";
+      el.timer.style.display = "none";
+      el.score.style.display = "inline-flex";
+      el.score.textContent = `Score ${state.hits}`;
+      el.lives.innerHTML = "";
+      setPaceHidden(true);
     }
   }
 
-  /* ==========
-     Target spawn / movement
-     ========== */
-  function fieldSize() {
-    const r = el.playfield.getBoundingClientRect();
-    return { w: r.width, h: r.height };
-  }
-
-  function randomPos(size) {
-    const { w, h } = fieldSize();
-    const x = Math.random() * Math.max(0, (w - size));
-    const y = Math.random() * Math.max(0, (h - size));
-    return { x, y };
-  }
-
-  function setTargetPos(t, x, y) {
-    t.style.left = `${x}px`;
-    t.style.top = `${y}px`;
-  }
+  /* ==========================
+     Warm-up + Endless mechanics
+     ========================== */
+  function currentPhase() { return WARMUP.phases[state.phaseIndex]; }
 
   function stopMotion() {
-    if (state.rafId) {
-      cancelAnimationFrame(state.rafId);
-      state.rafId = null;
-    }
+    if (state.rafId) { cancelAnimationFrame(state.rafId); state.rafId = null; }
   }
+
+  function setTargetPos(t, x, y) { t.style.left = `${x}px`; t.style.top = `${y}px`; }
 
   function startMotion(speed) {
     stopMotion();
-
-    // random velocity (px/ms)
     const angle = Math.random() * Math.PI * 2;
     const v = clamp(speed || 0.20, 0.12, 0.55);
     state.vel.x = Math.cos(angle) * v;
@@ -472,7 +552,6 @@
 
     const step = (now) => {
       if (!state.running || !state.targetEl) return;
-
       const dt = now - state.lastRaf;
       state.lastRaf = now;
 
@@ -485,7 +564,6 @@
       x += state.vel.x * dt;
       y += state.vel.y * dt;
 
-      // bounce
       if (x <= 0) { x = 0; state.vel.x *= -1; }
       if (y <= 0) { y = 0; state.vel.y *= -1; }
       if (x >= (w - size)) { x = Math.max(0, w - size); state.vel.x *= -1; }
@@ -498,10 +576,17 @@
     state.rafId = requestAnimationFrame(step);
   }
 
-  function spawnTarget({ size, lifetimeMs, moving, speed, withPace } = {}) {
+  function randomPos(size) {
+    const { w, h } = fieldSize();
+    return {
+      x: Math.random() * Math.max(0, (w - size)),
+      y: Math.random() * Math.max(0, (h - size)),
+    };
+  }
+
+  function spawnSingleTarget({ size, lifetimeMs, moving, speed, withPace } = {}) {
     clearTarget();
     clearTimeout(state.targetLifeId);
-    clearTimeout(state.paceId);
 
     const t = document.createElement("div");
     t.className = "target";
@@ -511,7 +596,6 @@
     const pos = randomPos(size);
     setTargetPos(t, pos.x, pos.y);
 
-    // Hit
     t.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -525,34 +609,15 @@
     if (moving) startMotion(speed);
     else stopMotion();
 
-    // Lifetime -> counts as miss
     if (lifetimeMs && lifetimeMs > 0) {
       state.targetLifeId = setTimeout(() => registerMiss("timeout"), lifetimeMs);
     }
 
-    // Pace bar animation (Endless)
-    if (withPace && lifetimeMs && lifetimeMs > 0) {
-      animatePace(lifetimeMs);
-      state.paceId = setTimeout(() => {
-        // if still running and target alive -> miss triggers anyway by lifetime,
-        // but paceId helps keep logic consistent
-      }, lifetimeMs);
-    }
-  }
-
-  /* ==========
-     Warm-up phase control
-     ========== */
-  function currentPhase() {
-    return WARMUP.phases[state.phaseIndex];
-  }
-
-  function clearPhaseDelays() {
-    if (state.spawnDelayId) { clearTimeout(state.spawnDelayId); state.spawnDelayId = null; }
+    if (withPace && lifetimeMs && lifetimeMs > 0) animatePace(lifetimeMs);
   }
 
   function scheduleReactionSpawn() {
-    clearPhaseDelays();
+    clearTimeout(state.spawnDelayId);
     clearTarget();
 
     const ph = currentPhase();
@@ -560,12 +625,7 @@
 
     state.spawnDelayId = setTimeout(() => {
       if (!state.running || state.mode !== "warmup") return;
-      // reaction target: time-limited to encourage quick response
-      spawnTarget({
-        size: ph.size,
-        lifetimeMs: ph.lifetimeMs,
-        moving: false
-      });
+      spawnSingleTarget({ size: ph.size, lifetimeMs: ph.lifetimeMs, moving: false });
     }, delay);
   }
 
@@ -574,17 +634,18 @@
     const ph = currentPhase();
     state.phaseLeft = ph.sec;
 
-    toast(`${ph.label}`);
+    toast(ph.label);
+    el.phasePill.textContent = ph.label;
     setHeaderUI();
 
     if (ph.key === "reaction") {
       scheduleReactionSpawn();
       setHint("Жди цель → нажми быстро");
     } else if (ph.key === "flick") {
-      spawnTarget({ size: ph.size, lifetimeMs: ph.lifetimeMs, moving: false });
+      spawnSingleTarget({ size: ph.size, lifetimeMs: ph.lifetimeMs, moving: false });
       setHint("Флик. Точность важнее скорости");
     } else {
-      spawnTarget({ size: ph.size, lifetimeMs: 0, moving: true, speed: ph.speed });
+      spawnSingleTarget({ size: ph.size, lifetimeMs: 0, moving: true, speed: ph.speed });
       setHint("Контроль. Попади по движущейся цели");
     }
   }
@@ -592,7 +653,6 @@
   function advancePhaseIfNeeded() {
     if (state.mode !== "warmup") return;
     if (state.phaseLeft > 0) return;
-
     const next = state.phaseIndex + 1;
     if (next >= WARMUP.phases.length) {
       endSession("Разминка завершена");
@@ -601,14 +661,7 @@
     startPhase(next);
   }
 
-  /* ==========
-     Endless config
-     ========== */
   function endlessParams(score) {
-    // Premium difficulty ramp:
-    // - smaller target
-    // - limited time-to-hit
-    // - moving after some score
     const size = clamp(32 - Math.floor(score / 6), 18, 32);
     const lifetimeMs = clamp(1400 - score * 18, 380, 1400);
     const moving = score >= 18;
@@ -616,9 +669,359 @@
     return { size, lifetimeMs, moving, speed };
   }
 
-  /* ==========
-     Hit / Miss logic
-     ========== */
+  /* ==========================
+     Arcade object engine
+     ========================== */
+
+  function makeBall({ x, y, size, vy = 0, shrinkTimeMs = 0, minSize = 0, kind }) {
+    const b = document.createElement("div");
+    b.className = "target";
+    b.style.width = `${size}px`;
+    b.style.height = `${size}px`;
+    b.style.left = `${x}px`;
+    b.style.top = `${y}px`;
+
+    const shrinkRate = (shrinkTimeMs > 0 && size > minSize)
+      ? (size - minSize) / shrinkTimeMs
+      : 0;
+
+    const obj = {
+      id: (crypto?.randomUUID ? crypto.randomUUID() : String(Math.random())),
+      el: b,
+      x, y,
+      size,
+      vy, // px/ms
+      minSize,
+      shrinkRate, // px/ms
+      kind,
+      alive: true,
+    };
+
+    b.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      arcadeHit(obj);
+    }, { passive: false });
+
+    el.playfield.appendChild(b);
+    return obj;
+  }
+
+  function removeBall(obj) {
+    obj.alive = false;
+    obj.el?.remove();
+  }
+
+  function arcadeHit(obj) {
+    if (!state.running) return;
+
+    playHitSound();
+    Haptic.light();
+
+    // В новых режимах клик по шару = remove + score
+    removeBall(obj);
+    state.hits += 1;
+    el.score.textContent = `Score ${state.hits}`;
+
+    // Для Shrink Arena: держим постоянное число шаров — спавним замену с небольшой задержкой
+    if (state.mode === "shrink") {
+      const p = ARCADE.shrink[state.diff];
+      setTimeout(() => {
+        if (!state.running || state.mode !== "shrink") return;
+        spawnShrinkBall();
+      }, p.respawnDelayMs);
+    }
+  }
+
+  function arcadeDefeat(reason) {
+    if (!state.running) return;
+
+    state.misses += 1;
+    playMissSound();
+    Haptic.error();
+    flashMiss();
+
+    if (reason === "empty") endSession("Промах");
+    else if (reason === "shrink") endSession("Шар исчез");
+    else if (reason === "bottom") endSession("Шар упал вниз");
+    else endSession("Поражение");
+  }
+
+  /* ---- Mode 1: Shrink Arena ---- */
+  function spawnShrinkBall() {
+    const p = ARCADE.shrink[state.diff];
+    const { w, h } = fieldSize();
+
+    const size = p.baseSize;
+    const x = Math.random() * Math.max(0, w - size);
+    const y = Math.random() * Math.max(0, h - size);
+
+    const obj = makeBall({
+      x, y,
+      size,
+      vy: 0,
+      shrinkTimeMs: p.shrinkTimeMs,
+      minSize: p.minSize,
+      kind: "shrink"
+    });
+
+    state.objects.push(obj);
+  }
+
+  function startShrinkArena(diff) {
+    state.mode = "shrink";
+    state.diff = diff;
+    state.running = true;
+    state.hits = 0;
+    state.misses = 0;
+
+    clearTimers();
+    clearTarget();
+    clearArcadeObjects();
+    stopMotion();
+
+    setPaceHidden(true);
+    showScreen(el.game);
+
+    el.phasePill.style.display = "none";
+    el.timer.style.display = "none";
+    el.lives.innerHTML = "";
+    setHeaderUI();
+
+    const p = ARCADE.shrink[diff];
+    setHint("Шары уменьшаются сами. Успей нажать до исчезновения. Любой промах = поражение.");
+
+    // initial spawn
+    for (let i = 0; i < p.balls; i++) spawnShrinkBall();
+
+    state.lastArcade = performance.now();
+    state.arcadeRaf = requestAnimationFrame(function loop(now){
+      if (!state.running || state.mode !== "shrink") return;
+      const dt = now - state.lastArcade;
+      state.lastArcade = now;
+
+      const { w, h } = fieldSize();
+
+      for (const obj of state.objects) {
+        if (!obj.alive) continue;
+
+        // auto-shrink
+        if (obj.shrinkRate > 0) {
+          const old = obj.size;
+          const next = old - obj.shrinkRate * dt;
+
+          if (next <= obj.minSize) {
+            removeBall(obj);
+            arcadeDefeat("shrink");
+            return;
+          }
+
+          // keep center while shrinking
+          const delta = old - next;
+          obj.size = next;
+          obj.x += delta / 2;
+          obj.y += delta / 2;
+
+          // clamp inside playfield
+          obj.x = clamp(obj.x, 0, Math.max(0, w - obj.size));
+          obj.y = clamp(obj.y, 0, Math.max(0, h - obj.size));
+
+          obj.el.style.width = `${obj.size}px`;
+          obj.el.style.height = `${obj.size}px`;
+          obj.el.style.left = `${obj.x}px`;
+          obj.el.style.top = `${obj.y}px`;
+        }
+      }
+
+      state.objects = state.objects.filter(o => o.alive);
+      state.arcadeRaf = requestAnimationFrame(loop);
+    });
+  }
+
+  /* ---- Mode 2: Falling ---- */
+  function spawnFallingBall() {
+    const p = ARCADE.falling[state.diff];
+    const { w } = fieldSize();
+
+    const size = p.size;
+    const x = Math.random() * Math.max(0, w - size);
+    const y = -size - 6;
+
+    const obj = makeBall({
+      x, y,
+      size,
+      vy: p.fallSpeed,
+      shrinkTimeMs: 0,
+      minSize: 0,
+      kind: "falling"
+    });
+
+    state.objects.push(obj);
+  }
+
+  function startFalling(diff) {
+    state.mode = "falling";
+    state.diff = diff;
+    state.running = true;
+    state.hits = 0;
+    state.misses = 0;
+
+    clearTimers();
+    clearTarget();
+    clearArcadeObjects();
+    stopMotion();
+
+    setPaceHidden(true);
+    showScreen(el.game);
+
+    el.phasePill.style.display = "none";
+    el.timer.style.display = "none";
+    el.lives.innerHTML = "";
+    setHeaderUI();
+
+    const p = ARCADE.falling[diff];
+    setHint(`Сбей шар до падения. Макс на экране: ${p.maxActive}. Любой промах = поражение.`);
+
+    state.spawnTimer = setInterval(() => {
+      if (!state.running || state.mode !== "falling") return;
+      const alive = state.objects.filter(o => o.alive).length;
+      if (alive < p.maxActive) spawnFallingBall();
+    }, p.spawnEveryMs);
+
+    state.lastArcade = performance.now();
+    state.arcadeRaf = requestAnimationFrame(function loop(now){
+      if (!state.running || state.mode !== "falling") return;
+      const dt = now - state.lastArcade;
+      state.lastArcade = now;
+
+      const { h } = fieldSize();
+
+      for (const obj of state.objects) {
+        if (!obj.alive) continue;
+
+        obj.y += obj.vy * dt;
+        obj.el.style.top = `${obj.y}px`;
+
+        if (obj.y + obj.size >= h - 2) {
+          removeBall(obj);
+          arcadeDefeat("bottom");
+          return;
+        }
+      }
+
+      state.objects = state.objects.filter(o => o.alive);
+      state.arcadeRaf = requestAnimationFrame(loop);
+    });
+  }
+
+  /* ---- Mode 3: Falling + Shrink ---- */
+  function spawnFallingShrinkBall() {
+    const p = ARCADE.fallshrink[state.diff];
+    const { w } = fieldSize();
+
+    const size = p.baseSize;
+    const x = Math.random() * Math.max(0, w - size);
+    const y = -size - 6;
+
+    const obj = makeBall({
+      x, y,
+      size,
+      vy: p.fallSpeed,
+      shrinkTimeMs: p.shrinkTimeMs,
+      minSize: p.minSize,
+      kind: "fallshrink"
+    });
+
+    state.objects.push(obj);
+  }
+
+  function startFallingShrink(diff) {
+    state.mode = "fallshrink";
+    state.diff = diff;
+    state.running = true;
+    state.hits = 0;
+    state.misses = 0;
+
+    clearTimers();
+    clearTarget();
+    clearArcadeObjects();
+    stopMotion();
+
+    setPaceHidden(true);
+    showScreen(el.game);
+
+    el.phasePill.style.display = "none";
+    el.timer.style.display = "none";
+    el.lives.innerHTML = "";
+    setHeaderUI();
+
+    const p = ARCADE.fallshrink[diff];
+    setHint(`Падают и уменьшаются. Успей нажать до исчезновения/падения. Любой промах = поражение.`);
+
+    state.spawnTimer = setInterval(() => {
+      if (!state.running || state.mode !== "fallshrink") return;
+      const alive = state.objects.filter(o => o.alive).length;
+      if (alive < p.maxActive) spawnFallingShrinkBall();
+    }, p.spawnEveryMs);
+
+    state.lastArcade = performance.now();
+    state.arcadeRaf = requestAnimationFrame(function loop(now){
+      if (!state.running || state.mode !== "fallshrink") return;
+      const dt = now - state.lastArcade;
+      state.lastArcade = now;
+
+      const { w, h } = fieldSize();
+
+      for (const obj of state.objects) {
+        if (!obj.alive) continue;
+
+        // fall
+        obj.y += obj.vy * dt;
+
+        // shrink
+        if (obj.shrinkRate > 0) {
+          const old = obj.size;
+          const next = old - obj.shrinkRate * dt;
+
+          if (next <= obj.minSize) {
+            removeBall(obj);
+            arcadeDefeat("shrink");
+            return;
+          }
+
+          const delta = old - next;
+          obj.size = next;
+
+          // keep center while shrinking
+          obj.x += delta / 2;
+          obj.y += delta / 2;
+
+          obj.x = clamp(obj.x, 0, Math.max(0, w - obj.size));
+          // y can be negative while above top
+          obj.y = clamp(obj.y, -obj.size - 60, Math.max(0, h - obj.size));
+
+          obj.el.style.width = `${obj.size}px`;
+          obj.el.style.height = `${obj.size}px`;
+        }
+
+        obj.el.style.left = `${obj.x}px`;
+        obj.el.style.top = `${obj.y}px`;
+
+        if (obj.y + obj.size >= h - 2) {
+          removeBall(obj);
+          arcadeDefeat("bottom");
+          return;
+        }
+      }
+
+      state.objects = state.objects.filter(o => o.alive);
+      state.arcadeRaf = requestAnimationFrame(loop);
+    });
+  }
+
+  /* ==========================
+     Hit/Miss (Warmup/Endless)
+     ========================== */
   function onHit() {
     if (!state.running) return;
 
@@ -627,7 +1030,6 @@
 
     state.hits += 1;
 
-    // Stats per phase
     if (state.mode === "warmup") {
       const ph = currentPhase();
       if (ph?.key === "reaction") state.reactionMs.push(dt);
@@ -635,32 +1037,25 @@
       if (ph?.key === "control") state.controlHits += 1;
     }
 
-    // Feedback
     playHitSound();
     Haptic.light();
 
-    // Next target depending on mode
     setHeaderUI();
 
     if (state.mode === "warmup") {
       const ph = currentPhase();
-
-      // Clear timers for current target
       clearTimeout(state.targetLifeId);
       state.targetLifeId = null;
 
-      if (ph.key === "reaction") {
-        // after hit, hide and wait random delay for next appearance
-        scheduleReactionSpawn();
-      } else if (ph.key === "flick") {
-        spawnTarget({ size: ph.size, lifetimeMs: ph.lifetimeMs, moving: false });
-      } else {
-        spawnTarget({ size: ph.size, lifetimeMs: 0, moving: true, speed: ph.speed });
-      }
-    } else {
-      // Endless: ramp difficulty
+      if (ph.key === "reaction") scheduleReactionSpawn();
+      else if (ph.key === "flick") spawnSingleTarget({ size: ph.size, lifetimeMs: ph.lifetimeMs, moving: false });
+      else spawnSingleTarget({ size: ph.size, lifetimeMs: 0, moving: true, speed: ph.speed });
+      return;
+    }
+
+    if (state.mode === "endless") {
       const p = endlessParams(state.hits);
-      spawnTarget({ size: p.size, lifetimeMs: p.lifetimeMs, moving: p.moving, speed: p.speed, withPace: true });
+      spawnSingleTarget({ size: p.size, lifetimeMs: p.lifetimeMs, moving: p.moving, speed: p.speed, withPace: true });
       el.score.textContent = `Score ${state.hits}`;
     }
   }
@@ -668,18 +1063,22 @@
   function registerMiss(reason = "miss") {
     if (!state.running) return;
 
-    // In reaction phase, if there is NO target yet, ignore random clicks (avoid раздражение)
+    // Arcade: клик по пустоте = поражение
+    if (state.mode === "shrink" || state.mode === "falling" || state.mode === "fallshrink") {
+      arcadeDefeat("empty");
+      return;
+    }
+
+    // Warmup: in reaction phase ignore early click if no target yet
     if (state.mode === "warmup") {
       const ph = currentPhase();
-      const hasTarget = !!state.targetEl;
-      if (ph?.key === "reaction" && !hasTarget && reason === "click") {
+      if (ph?.key === "reaction" && !state.targetEl && reason === "click") {
         toast("Рано 🙂");
         return;
       }
     }
 
     state.misses += 1;
-
     playMissSound();
     Haptic.error();
     flashMiss();
@@ -695,96 +1094,84 @@
 
       toast("Минус жизнь");
 
-      // Continue session: respawn depending on phase
       const ph = currentPhase();
       clearTimeout(state.targetLifeId);
       state.targetLifeId = null;
 
       if (ph.key === "reaction") scheduleReactionSpawn();
-      else if (ph.key === "flick") spawnTarget({ size: ph.size, lifetimeMs: ph.lifetimeMs, moving: false });
-      else spawnTarget({ size: ph.size, lifetimeMs: 0, moving: true, speed: ph.speed });
+      else if (ph.key === "flick") spawnSingleTarget({ size: ph.size, lifetimeMs: ph.lifetimeMs, moving: false });
+      else spawnSingleTarget({ size: ph.size, lifetimeMs: 0, moving: true, speed: ph.speed });
 
       return;
     }
 
-    // Endless: miss ends immediately
     endSession(reason === "timeout" ? "Время вышло" : "Промах");
   }
 
-  /* ==========
-     Start / Stop sessions
-     ========== */
-  function resetStateFor(mode) {
+  /* ==========================
+     Session start/stop
+     ========================== */
+  function resetBase(mode) {
     clearTimers();
     clearTarget();
+    clearArcadeObjects();
+    stopMotion();
 
     state.mode = mode;
+    state.diff = null;
     state.running = true;
 
     state.hits = 0;
     state.misses = 0;
+
     state.reactionMs = [];
     state.flickMs = [];
     state.controlHits = 0;
-
-    if (mode === "warmup") {
-      state.totalLeft = WARMUP.totalSec;
-      state.phaseIndex = 0;
-      state.phaseLeft = WARMUP.phases[0].sec;
-      state.lives = WARMUP.lives;
-
-      setPaceHidden(true);
-    } else {
-      state.totalLeft = 0;
-      state.phaseIndex = 0;
-      state.phaseLeft = 0;
-      state.lives = 0;
-
-      setPaceHidden(false);
-    }
   }
 
   function startWarmup() {
-    resetStateFor("warmup");
+    resetBase("warmup");
+    state.totalLeft = WARMUP.totalSec;
+    state.phaseIndex = 0;
+    state.phaseLeft = WARMUP.phases[0].sec;
+    state.lives = WARMUP.lives;
+
     showScreen(el.game);
 
-    // Ensure layout measured before spawn
-    requestAnimationFrame(() => {
-      setHeaderUI();
-      setHint("Разминка: 3 фазы • 3 жизни");
-      startPhase(0);
+    el.phasePill.style.display = "inline-flex";
+    el.timer.style.display = "inline-flex";
+    el.score.style.display = "inline-flex";
 
-      // Tick each second
-      tickId = setInterval(() => {
-        if (!state.running || state.mode !== "warmup") return;
+    setHeaderUI();
+    startPhase(0);
 
-        state.totalLeft -= 1;
-        state.phaseLeft -= 1;
+    tickId = setInterval(() => {
+      if (!state.running || state.mode !== "warmup") return;
 
-        el.timer.textContent = fmtTime(Math.max(0, state.totalLeft));
-        el.score.textContent = `Hits ${state.hits}`;
+      state.totalLeft -= 1;
+      state.phaseLeft -= 1;
 
-        if (state.totalLeft <= 0) {
-          endSession("Разминка завершена");
-          return;
-        }
+      el.timer.textContent = fmtTime(Math.max(0, state.totalLeft));
+      el.score.textContent = `Hits ${state.hits}`;
 
-        advancePhaseIfNeeded();
-      }, 1000);
-    });
+      if (state.totalLeft <= 0) {
+        endSession("Разминка завершена");
+        return;
+      }
+      advancePhaseIfNeeded();
+    }, 1000);
   }
 
   function startEndless() {
-    resetStateFor("endless");
+    resetBase("endless");
     showScreen(el.game);
 
-    requestAnimationFrame(() => {
-      setHeaderUI();
-      setHint("Endless: промах или таймаут = конец");
-      const p = endlessParams(0);
-      spawnTarget({ size: p.size, lifetimeMs: p.lifetimeMs, moving: p.moving, speed: p.speed, withPace: true });
-      el.score.textContent = `Score ${state.hits}`;
-    });
+    setHeaderUI();
+    setHint("Endless: промах или таймаут = конец");
+
+    const p = endlessParams(0);
+    spawnSingleTarget({ size: p.size, lifetimeMs: p.lifetimeMs, moving: p.moving, speed: p.speed, withPace: true });
+    el.score.textContent = `Score ${state.hits}`;
   }
 
   function endSession(title) {
@@ -793,36 +1180,38 @@
     state.running = false;
     clearTimers();
     clearTarget();
+    clearArcadeObjects();
     stopMotion();
 
-    // Save best for Endless
+    // Save best
     if (state.mode === "endless") {
       const best = Number(store.get(KEYS.bestEndless, "0"));
-      const next = Math.max(best, state.hits);
-      store.set(KEYS.bestEndless, String(next));
+      store.set(KEYS.bestEndless, String(Math.max(best, state.hits)));
     }
 
-    // Mark streak on any completed session
+    if (state.mode === "shrink" || state.mode === "falling" || state.mode === "fallshrink") {
+      const key = bestKey(state.mode, state.diff);
+      const best = Number(store.get(key, "0"));
+      store.set(key, String(Math.max(best, state.hits)));
+    }
+
     markTrainingComplete();
     updateHomeStats();
 
-    // Build results
     el.resultTitle.textContent = title || "Готово";
+
+    if (state.mode === "warmup") el.resultSubtitle.textContent = "Разогрелся. Дальше — катка.";
+    else if (state.mode === "endless") el.resultSubtitle.textContent = "Ещё попытка — и будет выше.";
+    else el.resultSubtitle.textContent = "Жёстко. Но рекорды именно так и делаются.";
 
     if (state.mode === "warmup") {
       const hits = state.hits;
       const misses = state.misses;
       const acc = (hits + misses) > 0 ? Math.round((hits / (hits + misses)) * 100) : 0;
-
       const avg = (arr) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0) / arr.length) : null;
+
       const avgReaction = avg(state.reactionMs);
       const avgFlick = avg(state.flickMs);
-
-      // “Ready” subtitle, neutral but motivating
-      let subtitle = "Разогрелся. Дальше — катка.";
-      if (acc >= 86 && (avgReaction !== null && avgReaction <= 230)) subtitle = "Чисто. Ты готов играть.";
-      else if (acc >= 78) subtitle = "Хорошо. Разгон есть.";
-      el.resultSubtitle.textContent = subtitle;
 
       el.resultStats.innerHTML = `
         <div><b>Сводка</b></div>
@@ -835,114 +1224,137 @@
         <div>Flick: ${avgFlick === null ? "—" : `<b>${avgFlick} ms</b> (avg)`}</div>
         <div>Control: <b>${state.controlHits}</b> попаданий</div>
       `;
-    } else {
+      el.replayBtn.textContent = "Ещё разминка";
+    } else if (state.mode === "endless") {
       const score = state.hits;
       const best = Number(store.get(KEYS.bestEndless, "0"));
-      const acc = (score + state.misses) > 0 ? Math.round((score / (score + state.misses)) * 100) : 0;
-
-      let subtitle = "Ещё попытка — и будет выше.";
-      if (score >= best && score > 0) subtitle = "Новый рекорд. Красиво.";
-      else if (score >= 20) subtitle = "Уже уверенно. Дальше — больше.";
-      el.resultSubtitle.textContent = subtitle;
-
       el.resultStats.innerHTML = `
         <div><b>Endless</b></div>
         <div>Счёт: <b>${score}</b></div>
         <div>Рекорд: <b>${best}</b></div>
         <div style="color: rgba(255,255,255,0.62); margin-top: 6px;">Промах или таймаут завершает раунд.</div>
       `;
+      el.replayBtn.textContent = "Играть ещё";
+    } else {
+      const score = state.hits;
+      const key = bestKey(state.mode, state.diff);
+      const best = Number(store.get(key, "0"));
+
+      const nice =
+        state.mode === "shrink" ? "Shrink Arena" :
+        state.mode === "falling" ? "Falling" :
+        "Falling + Shrink";
+
+      el.resultStats.innerHTML = `
+        <div><b>${nice}</b> • ${String(state.diff).toUpperCase()}</div>
+        <div>Счёт: <b>${score}</b></div>
+        <div>Рекорд: <b>${best}</b></div>
+        <div style="color: rgba(255,255,255,0.62); margin-top: 6px;">Любой промах завершает раунд.</div>
+      `;
+      el.replayBtn.textContent = "Ещё попытка";
     }
 
-    // buttons
-    el.replayBtn.textContent = (state.mode === "endless") ? "Играть ещё" : "Ещё разминка";
     setHint("");
-
     showScreen(el.result);
   }
 
-  /* ==========
-     Input events (miss detection)
-     ========== */
-  // Miss on click/tap on playfield (target stops propagation)
+  /* ==========================
+     Input (miss)
+     ========================== */
   el.playfield.addEventListener("pointerdown", () => {
     if (!state.running) return;
     registerMiss("click");
   });
 
-  // Quit
   el.quitBtn.addEventListener("click", () => {
     if (!state.running) return;
     endSession("Остановлено");
   });
 
-  /* ==========
+  /* ==========================
      Result actions
-     ========== */
+     ========================== */
   el.replayBtn.addEventListener("click", () => {
     ensureAudio();
     if (state.mode === "endless") startEndless();
-    else startWarmup();
+    else if (state.mode === "warmup") startWarmup();
+    else if (state.mode === "shrink") startShrinkArena(state.diff);
+    else if (state.mode === "falling") startFalling(state.diff);
+    else if (state.mode === "fallshrink") startFallingShrink(state.diff);
   });
 
-  el.homeBtn.addEventListener("click", () => {
-    showScreen(el.home);
-  });
+  el.homeBtn.addEventListener("click", () => showScreen(el.home));
 
   el.closeBtn.addEventListener("click", () => {
-    if (tg && typeof tg.close === "function") {
-      tgSafe(tg.close.bind(tg));
-      return;
-    }
-    // fallback: go home
-    showScreen(el.home);
+    if (tg && typeof tg.close === "function") tgSafe(tg.close.bind(tg));
+    else showScreen(el.home);
   });
 
-  /* ==========
+  /* ==========================
      Home actions
-     ========== */
-  el.startWarmup.addEventListener("click", () => {
-    ensureAudio();
-    startWarmup();
-  });
+     ========================== */
+  el.startWarmup.addEventListener("click", () => { ensureAudio(); startWarmup(); });
+  el.startEndless.addEventListener("click", () => { ensureAudio(); startEndless(); });
 
-  el.startEndless.addEventListener("click", () => {
-    ensureAudio();
-    startEndless();
-  });
+  el.modeShrink.addEventListener("click", () => openSheet("shrink"));
+  el.modeFalling.addEventListener("click", () => openSheet("falling"));
+  el.modeFallingShrink.addEventListener("click", () => openSheet("fallshrink"));
 
-  /* ==========
+  function startPendingDiff(diff) {
+    if (!pendingMode) return;
+    ensureAudio();
+    const mode = pendingMode; // preserve before close
+    closeSheet();
+
+    requestAnimationFrame(() => {
+      if (mode === "shrink") startShrinkArena(diff);
+      if (mode === "falling") startFalling(diff);
+      if (mode === "fallshrink") startFallingShrink(diff);
+    });
+  }
+
+  el.diffEasy.addEventListener("click", () => startPendingDiff("easy"));
+  el.diffMed.addEventListener("click", () => startPendingDiff("med"));
+  el.diffHard.addEventListener("click", () => startPendingDiff("hard"));
+
+  /* ==========================
      Resize safety
-     ========== */
+     ========================== */
   window.addEventListener("resize", () => {
-    // If running, re-spawn target to keep it inside bounds after orientation change
     if (!state.running) return;
 
+    // Arcade: clamp objects into bounds (avoid offscreen after rotate)
+    if (state.mode === "shrink" || state.mode === "falling" || state.mode === "fallshrink") {
+      const { w, h } = fieldSize();
+      for (const obj of state.objects) {
+        if (!obj.alive) continue;
+        obj.x = clamp(obj.x, 0, Math.max(0, w - obj.size));
+        obj.y = clamp(obj.y, -obj.size - 80, Math.max(0, h - obj.size));
+        obj.el.style.left = `${obj.x}px`;
+        obj.el.style.top = `${obj.y}px`;
+      }
+      return;
+    }
+
+    // Warmup/Endless: respawn target
     if (state.mode === "warmup") {
       const ph = currentPhase();
       if (!ph) return;
-
-      if (ph.key === "reaction") {
-        // if target is visible, re-spawn quickly; else keep schedule
-        if (state.targetEl) spawnTarget({ size: ph.size, lifetimeMs: ph.lifetimeMs, moving: false });
-      } else if (ph.key === "flick") {
-        spawnTarget({ size: ph.size, lifetimeMs: ph.lifetimeMs, moving: false });
-      } else {
-        spawnTarget({ size: ph.size, lifetimeMs: 0, moving: true, speed: ph.speed });
-      }
-    } else {
+      if (ph.key === "reaction") { if (state.targetEl) spawnSingleTarget({ size: ph.size, lifetimeMs: ph.lifetimeMs, moving: false }); }
+      else if (ph.key === "flick") spawnSingleTarget({ size: ph.size, lifetimeMs: ph.lifetimeMs, moving: false });
+      else spawnSingleTarget({ size: ph.size, lifetimeMs: 0, moving: true, speed: ph.speed });
+    } else if (state.mode === "endless") {
       const p = endlessParams(state.hits);
-      spawnTarget({ size: p.size, lifetimeMs: p.lifetimeMs, moving: p.moving, speed: p.speed, withPace: true });
+      spawnSingleTarget({ size: p.size, lifetimeMs: p.lifetimeMs, moving: p.moving, speed: p.speed, withPace: true });
     }
   });
 
-  /* ==========
+  /* ==========================
      Init
-     ========== */
+     ========================== */
   applyTelegramTheme();
   updateHomeStats();
-
-  // show loader first, then home
-  showScreen(el.home); // home is there but loader covers it anyway
+  showScreen(el.home);
   runLoader(2500);
 
 })();
