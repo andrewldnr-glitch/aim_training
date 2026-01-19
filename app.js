@@ -337,254 +337,7 @@
   }
 
   /* ==========================
-     Raw mouse engine
-     ========================== */
-  const rawMouse = {
-    locked: false, // pointer lock active
-    x: 0,
-    y: 0,
-    softActive: false, // fallback tracking active
-    lastClientX: 0,
-    lastClientY: 0,
-  };
-
-  function setCrosshairVisible(on) {
-    if (!rawUI.crosshair) return;
-    rawUI.crosshair.classList.toggle("hidden", !on);
-  }
-
-  function updateCrosshair() {
-    if (!rawUI.crosshair) return;
-    rawUI.crosshair.style.left = `${rawMouse.x}px`;
-    rawUI.crosshair.style.top = `${rawMouse.y}px`;
-  }
-
-  function centerCrosshair() {
-    const { w, h } = fieldSize();
-    rawMouse.x = w / 2;
-    rawMouse.y = h / 2;
-    updateCrosshair();
-  }
-
-  function pointerLockSupported() {
-    return !!(document.pointerLockElement !== undefined
-      && el.playfield
-      && typeof el.playfield.requestPointerLock === "function");
-  }
-
-  function exitPointerLockSafe() {
-    try {
-      if (document.pointerLockElement) document.exitPointerLock?.();
-    } catch (_) {}
-  }
-
-  function enterPointerLockIfEnabled() {
-    if (!rawSettings.enabled) return;
-
-    if (!pointerLockSupported()) return; // fallback всё равно будет работать
-
-    try {
-      el.playfield.requestPointerLock();
-    } catch (_) {}
-  }
-
-  function applyRawAimVisuals() {
-    const on = !!(rawSettings.enabled && state.running);
-    if (el.playfield) el.playfield.classList.toggle("rawAim", on);
-    if (!on) {
-      setCrosshairVisible(false);
-      rawMouse.softActive = false;
-      return;
-    }
-    // в raw-режиме прицел нужен всегда (и в lock, и в fallback)
-    setCrosshairVisible(true);
-    if (!rawMouse.locked && !rawMouse.softActive) centerCrosshair();
-  }
-
-  document.addEventListener("pointerlockchange", () => {
-    rawMouse.locked = (document.pointerLockElement === el.playfield);
-    // если залочились — сбрасываем soft
-    if (rawMouse.locked) {
-      rawMouse.softActive = false;
-      centerCrosshair();
-      toast("Raw mouse: ON (Esc — выйти)");
-    }
-    applyRawAimVisuals();
-  });
-
-  // Pointer Lock movement (real raw deltas)
- el.playfield.addEventListener("mousemove", (e) => {
-  if (!rawSettings.enabled || rawMouse.locked || !state.running) return;
-
-  const rect = el.playfield.getBoundingClientRect();
-  const { w, h } = fieldSize();
-
-  // курсор внутри playfield (абсолютные координаты)
-  const rx = clamp(e.clientX - rect.left, 0, w);
-  const ry = clamp(e.clientY - rect.top, 0, h);
-
-  // "sens" как масштаб от центра: center + (pos-center)*sens
-  rawMouse.x = clamp((rx - w / 2) * rawSettings.sens + w / 2, 0, w);
-  rawMouse.y = clamp((ry - h / 2) * rawSettings.sens + h / 2, 0, h);
-
-  setCrosshairVisible(true);
-  updateCrosshair();
-});
-
-
-  // Fallback: software-raw (если pointer lock недоступен/отключён)
-  if (el.playfield) {
-    el.playfield.addEventListener("mouseenter", () => {
-      if (!rawSettings.enabled || rawMouse.locked || !state.running) return;
-      rawMouse.softActive = false; // включится на первом mousemove
-      applyRawAimVisuals();
-    });
-
-    el.playfield.addEventListener("mouseleave", () => {
-      if (!rawSettings.enabled || rawMouse.locked) return;
-      rawMouse.softActive = false;
-      // при уходе мыши с поля — скрываем, чтобы не выглядело странно
-      setCrosshairVisible(false);
-    });
-
-    el.playfield.addEventListener("mousemove", (e) => {
-      if (!rawSettings.enabled || rawMouse.locked || !state.running) return;
-
-      const rect = el.playfield.getBoundingClientRect();
-      const { w, h } = fieldSize();
-
-      // первая инициализация — ставим прицел туда, где мышь
-      if (!rawMouse.softActive) {
-        rawMouse.softActive = true;
-        rawMouse.lastClientX = e.clientX;
-        rawMouse.lastClientY = e.clientY;
-
-        rawMouse.x = clamp(e.clientX - rect.left, 0, w);
-        rawMouse.y = clamp(e.clientY - rect.top, 0, h);
-        setCrosshairVisible(true);
-        updateCrosshair();
-        return;
-      }
-
-      // дальше — двигаем прицел по дельтам * sens
-      const dx = e.clientX - rawMouse.lastClientX;
-      const dy = e.clientY - rawMouse.lastClientY;
-      rawMouse.lastClientX = e.clientX;
-      rawMouse.lastClientY = e.clientY;
-
-      rawMouse.x = clamp(rawMouse.x + dx * rawSettings.sens, 0, w);
-      rawMouse.y = clamp(rawMouse.y + dy * rawSettings.sens, 0, h);
-      setCrosshairVisible(true);
-      updateCrosshair();
-    });
-  }
-
-  function initRawUI() {
-    if (rawUI.toggle) {
-      rawUI.toggle.checked = rawSettings.enabled;
-
-      rawUI.toggle.addEventListener("change", () => {
-        // на мобиле отключаем — иначе будет ломать UX
-        if (rawUI.toggle.checked && isCoarsePointer) {
-          rawUI.toggle.checked = false;
-          rawSettings.enabled = false;
-          store.set(RAW_KEYS.enabled, "0");
-          toast("Raw mouse только для Desktop");
-          return;
-        }
-
-        rawSettings.enabled = !!rawUI.toggle.checked;
-        store.set(RAW_KEYS.enabled, rawSettings.enabled ? "1" : "0");
-
-        if (!rawSettings.enabled) {
-          exitPointerLockSafe();
-          setCrosshairVisible(false);
-          if (el.playfield) el.playfield.classList.remove("rawAim");
-        } else {
-          // если уже в игре — включаем visuals и пробуем lock
-          if (state.running) {
-            applyRawAimVisuals();
-            enterPointerLockIfEnabled();
-          }
-        }
-      });
-    }
-
-    if (rawUI.range) {
-      rawUI.range.value = String(rawSettings.sens.toFixed(2));
-      if (rawUI.value) rawUI.value.textContent = rawSettings.sens.toFixed(2);
-
-      rawUI.range.addEventListener("input", () => {
-        const v = clamp(Number(rawUI.range.value), 0.3, 3.0);
-        rawSettings.sens = v;
-        store.set(RAW_KEYS.sens, v.toFixed(2));
-        if (rawUI.value) rawUI.value.textContent = v.toFixed(2);
-      });
-    }
-  }
-
-  /* ==========================
-     Difficulty Sheet
-     ========================== */
-  const modeInfo = {
-    shrink: {
-      title: "Shrink Arena",
-      subtitle: "OSU-like поток целей. Кружки сами уменьшаются — успей нажать до исчезновения.",
-      meta: {
-        easy: "макс 3 • мягкий ритм",
-        med:  "макс 4 • быстрее",
-        hard: "макс 5 • жёстко",
-      }
-    },
-    falling: {
-      title: "Falling",
-      subtitle: "Шары падают сверху вниз. Успей нажать до нижней границы.",
-      meta: {
-        easy: "до 6 • темп ×1.0",
-        med:  "до 10 • темп ×1.25",
-        hard: "до 15 • темп ×1.55",
-      }
-    },
-    fallshrink: {
-      title: "Falling + Shrink",
-      subtitle: "Падают и одновременно уменьшаются. Успей нажать до исчезновения или падения.",
-      meta: {
-        easy: "до 6 • shrink мягкий",
-        med:  "до 10 • shrink быстрее",
-        hard: "до 15 • shrink жёсткий",
-      }
-    }
-  };
-
-  let pendingMode = null;
-
-  function openSheet(modeKey) {
-    pendingMode = modeKey;
-    const info = modeInfo[modeKey];
-
-    el.sheetTitle.textContent = info.title;
-    el.sheetSubtitle.textContent = info.subtitle;
-    el.diffEasyMeta.textContent = info.meta.easy;
-    el.diffMedMeta.textContent = info.meta.med;
-    el.diffHardMeta.textContent = info.meta.hard;
-
-    el.sheetOverlay.classList.remove("hidden");
-    el.sheetOverlay.setAttribute("aria-hidden", "false");
-  }
-
-  function closeSheet() {
-    el.sheetOverlay.classList.add("hidden");
-    el.sheetOverlay.setAttribute("aria-hidden", "true");
-    pendingMode = null;
-  }
-
-  if (el.sheetClose) el.sheetClose.addEventListener("click", closeSheet);
-  if (el.sheetOverlay) el.sheetOverlay.addEventListener("click", (e) => {
-    if (e.target === el.sheetOverlay) closeSheet();
-  });
-
-  /* ==========================
-     Warmup + Endless
+     Runtime state
      ========================== */
   const WARMUP = {
     totalSec: 180,
@@ -596,9 +349,6 @@
     ]
   };
 
-  /* ==========================
-     Arcade Config
-     ========================== */
   const ARCADE = {
     shrink: {
       easy: { maxActive: 3, baseSize: 58, minSize: 12, shrinkTimeMs: 3200, spawnEveryMs: 650, jitterMs: 260 },
@@ -617,9 +367,6 @@
     }
   };
 
-  /* ==========================
-     Runtime state
-     ========================== */
   const state = {
     mode: null,        // warmup | endless | shrink | falling | fallshrink
     diff: null,        // easy | med | hard
@@ -751,6 +498,284 @@
   }
 
   /* ==========================
+     Raw mouse engine
+     ========================== */
+  const rawMouse = {
+    locked: false,
+    x: 0,
+    y: 0,
+  };
+
+  // Fallback smoothing via rAF (fix for jitter)
+  const rawFallback = {
+    rect: null,
+    w: 0,
+    h: 0,
+    rx: 0, // last pointer x inside playfield
+    ry: 0, // last pointer y inside playfield
+    active: false,
+    rafId: null,
+  };
+
+  function setCrosshairVisible(on) {
+    if (!rawUI.crosshair) return;
+    rawUI.crosshair.classList.toggle("hidden", !on);
+  }
+
+  function updateCrosshair() {
+    if (!rawUI.crosshair) return;
+    rawUI.crosshair.style.left = `${rawMouse.x}px`;
+    rawUI.crosshair.style.top = `${rawMouse.y}px`;
+  }
+
+  function updatePlayfieldMetrics() {
+    if (!el.playfield) return;
+    rawFallback.rect = el.playfield.getBoundingClientRect();
+    rawFallback.w = rawFallback.rect.width;
+    rawFallback.h = rawFallback.rect.height;
+  }
+
+  function computeFallbackAim() {
+    const w = rawFallback.w || 1;
+    const h = rawFallback.h || 1;
+
+    // sens = масштаб от центра
+    const tx = clamp((rawFallback.rx - w / 2) * rawSettings.sens + w / 2, 0, w);
+    const ty = clamp((rawFallback.ry - h / 2) * rawSettings.sens + h / 2, 0, h);
+
+    rawMouse.x = tx;
+    rawMouse.y = ty;
+  }
+
+  function startFallbackLoop() {
+    if (rawFallback.rafId) return;
+
+    const tick = () => {
+      if (!rawSettings.enabled || rawMouse.locked || !state.running || !rawFallback.active) {
+        rawFallback.rafId = null;
+        return;
+      }
+
+      computeFallbackAim();
+      setCrosshairVisible(true);
+      updateCrosshair();
+
+      rawFallback.rafId = requestAnimationFrame(tick);
+    };
+
+    rawFallback.rafId = requestAnimationFrame(tick);
+  }
+
+  function pointerLockSupported() {
+    return !!(document.pointerLockElement !== undefined
+      && el.playfield
+      && typeof el.playfield.requestPointerLock === "function");
+  }
+
+  function exitPointerLockSafe() {
+    try {
+      if (document.pointerLockElement) document.exitPointerLock?.();
+    } catch (_) {}
+  }
+
+  function enterPointerLockIfEnabled() {
+    if (!rawSettings.enabled) return;
+    if (!pointerLockSupported()) return;
+    try { el.playfield.requestPointerLock(); } catch (_) {}
+  }
+
+  function applyRawAimVisuals() {
+    const on = !!(rawSettings.enabled && state.running);
+    if (el.playfield) el.playfield.classList.toggle("rawAim", on);
+
+    // показываем прицел только когда он реально нужен:
+    // - в pointer lock
+    // - или fallback активен (курсор внутри поля)
+    const shouldShow = on && (rawMouse.locked || rawFallback.active);
+    setCrosshairVisible(shouldShow);
+
+    if (!on) {
+      rawFallback.active = false;
+      return;
+    }
+  }
+
+  document.addEventListener("pointerlockchange", () => {
+    rawMouse.locked = (document.pointerLockElement === el.playfield);
+
+    if (rawMouse.locked) {
+      // при lock fallback отключаем
+      rawFallback.active = false;
+      updatePlayfieldMetrics();
+      rawMouse.x = (rawFallback.w || 1) / 2;
+      rawMouse.y = (rawFallback.h || 1) / 2;
+      setCrosshairVisible(true);
+      updateCrosshair();
+      toast("Raw mouse: LOCK");
+    } else if (rawSettings.enabled && state.running) {
+      toast("Raw mouse: fallback");
+    }
+
+    applyRawAimVisuals();
+  });
+
+  // Pointer Lock movement (real raw deltas)
+  document.addEventListener("mousemove", (e) => {
+    if (!rawMouse.locked) return;
+    const { w, h } = fieldSize();
+
+    rawMouse.x = clamp(rawMouse.x + e.movementX * rawSettings.sens, 0, w);
+    rawMouse.y = clamp(rawMouse.y + e.movementY * rawSettings.sens, 0, h);
+
+    updateCrosshair();
+  });
+
+  // Fallback pointer tracking (no layout thrash + rAF drawing)
+  if (el.playfield) {
+    el.playfield.addEventListener("pointerenter", (e) => {
+      if (!rawSettings.enabled || rawMouse.locked || !state.running) return;
+
+      updatePlayfieldMetrics();
+      rawFallback.active = true;
+
+      const rect = rawFallback.rect;
+      rawFallback.rx = clamp(e.clientX - rect.left, 0, rawFallback.w);
+      rawFallback.ry = clamp(e.clientY - rect.top, 0, rawFallback.h);
+
+      // сразу обновим позицию, чтобы не было "первого скачка"
+      computeFallbackAim();
+      setCrosshairVisible(true);
+      updateCrosshair();
+
+      startFallbackLoop();
+      applyRawAimVisuals();
+    }, { passive: true });
+
+    el.playfield.addEventListener("pointerleave", () => {
+      if (!rawSettings.enabled || rawMouse.locked) return;
+      rawFallback.active = false;
+      setCrosshairVisible(false);
+    }, { passive: true });
+
+    el.playfield.addEventListener("pointermove", (e) => {
+      if (!rawSettings.enabled || rawMouse.locked || !state.running || !rawFallback.active) return;
+      if (!rawFallback.rect) updatePlayfieldMetrics();
+
+      const rect = rawFallback.rect;
+
+      const list = (typeof e.getCoalescedEvents === "function") ? e.getCoalescedEvents() : [e];
+      const last = list[list.length - 1] || e;
+
+      rawFallback.rx = clamp(last.clientX - rect.left, 0, rawFallback.w);
+      rawFallback.ry = clamp(last.clientY - rect.top, 0, rawFallback.h);
+    }, { passive: true });
+  }
+
+  function initRawUI() {
+    if (rawUI.toggle) {
+      rawUI.toggle.checked = rawSettings.enabled;
+
+      rawUI.toggle.addEventListener("change", () => {
+        if (rawUI.toggle.checked && isCoarsePointer) {
+          rawUI.toggle.checked = false;
+          rawSettings.enabled = false;
+          store.set(RAW_KEYS.enabled, "0");
+          toast("Raw mouse только для Desktop");
+          return;
+        }
+
+        rawSettings.enabled = !!rawUI.toggle.checked;
+        store.set(RAW_KEYS.enabled, rawSettings.enabled ? "1" : "0");
+
+        if (!rawSettings.enabled) {
+          exitPointerLockSafe();
+          rawFallback.active = false;
+          setCrosshairVisible(false);
+          if (el.playfield) el.playfield.classList.remove("rawAim");
+        } else {
+          if (state.running) {
+            updatePlayfieldMetrics();
+            applyRawAimVisuals();
+            enterPointerLockIfEnabled();
+          }
+        }
+      });
+    }
+
+    if (rawUI.range) {
+      rawUI.range.value = String(rawSettings.sens.toFixed(2));
+      if (rawUI.value) rawUI.value.textContent = rawSettings.sens.toFixed(2);
+
+      rawUI.range.addEventListener("input", () => {
+        const v = clamp(Number(rawUI.range.value), 0.3, 3.0);
+        rawSettings.sens = v;
+        store.set(RAW_KEYS.sens, v.toFixed(2));
+        if (rawUI.value) rawUI.value.textContent = v.toFixed(2);
+      });
+    }
+  }
+
+  /* ==========================
+     Difficulty Sheet
+     ========================== */
+  const modeInfo = {
+    shrink: {
+      title: "Shrink Arena",
+      subtitle: "OSU-like поток целей. Кружки сами уменьшаются — успей нажать до исчезновения.",
+      meta: {
+        easy: "макс 3 • мягкий ритм",
+        med:  "макс 4 • быстрее",
+        hard: "макс 5 • жёстко",
+      }
+    },
+    falling: {
+      title: "Falling",
+      subtitle: "Шары падают сверху вниз. Успей нажать до нижней границы.",
+      meta: {
+        easy: "до 6 • темп ×1.0",
+        med:  "до 10 • темп ×1.25",
+        hard: "до 15 • темп ×1.55",
+      }
+    },
+    fallshrink: {
+      title: "Falling + Shrink",
+      subtitle: "Падают и одновременно уменьшаются. Успей нажать до исчезновения или падения.",
+      meta: {
+        easy: "до 6 • shrink мягкий",
+        med:  "до 10 • shrink быстрее",
+        hard: "до 15 • shrink жёсткий",
+      }
+    }
+  };
+
+  let pendingMode = null;
+
+  function openSheet(modeKey) {
+    pendingMode = modeKey;
+    const info = modeInfo[modeKey];
+
+    el.sheetTitle.textContent = info.title;
+    el.sheetSubtitle.textContent = info.subtitle;
+    el.diffEasyMeta.textContent = info.meta.easy;
+    el.diffMedMeta.textContent = info.meta.med;
+    el.diffHardMeta.textContent = info.meta.hard;
+
+    el.sheetOverlay.classList.remove("hidden");
+    el.sheetOverlay.setAttribute("aria-hidden", "false");
+  }
+
+  function closeSheet() {
+    el.sheetOverlay.classList.add("hidden");
+    el.sheetOverlay.setAttribute("aria-hidden", "true");
+    pendingMode = null;
+  }
+
+  if (el.sheetClose) el.sheetClose.addEventListener("click", closeSheet);
+  if (el.sheetOverlay) el.sheetOverlay.addEventListener("click", (e) => {
+    if (e.target === el.sheetOverlay) closeSheet();
+  });
+
+  /* ==========================
      Warm-up + Endless mechanics
      ========================== */
   function currentPhase() { return WARMUP.phases[state.phaseIndex]; }
@@ -815,10 +840,9 @@
     const pos = randomPos(size);
     setTargetPos(t, pos.x, pos.y);
 
-    // ВАЖНО: если включен raw mouse — НЕ даём кликать по цели напрямую.
-    // Клик должен идти в playfield как "выстрел", чтобы sens работал.
+    // если включен raw mouse — НЕ даём кликать по цели напрямую.
     t.addEventListener("pointerdown", (e) => {
-      if (rawSettings.enabled) return; // дать событию всплыть
+      if (rawSettings.enabled) return; // пусть всплывает в playfield (выстрел)
       e.preventDefault();
       e.stopPropagation();
       onHit();
@@ -922,9 +946,8 @@
       alive: true,
     };
 
-    // В raw-режиме НЕ даём кликать напрямую
     b.addEventListener("pointerdown", (e) => {
-      if (rawSettings.enabled) return; // пусть всплывает в playfield (выстрел)
+      if (rawSettings.enabled) return; // выстрелом
       e.preventDefault();
       e.stopPropagation();
       arcadeHit(obj);
@@ -1087,6 +1110,7 @@
 
     setPaceHidden(true);
     showScreen(el.game);
+    updatePlayfieldMetrics();
 
     el.phasePill.style.display = "none";
     el.timer.style.display = "none";
@@ -1194,6 +1218,7 @@
 
     setPaceHidden(true);
     showScreen(el.game);
+    updatePlayfieldMetrics();
 
     el.phasePill.style.display = "none";
     el.timer.style.display = "none";
@@ -1275,6 +1300,7 @@
 
     setPaceHidden(true);
     showScreen(el.game);
+    updatePlayfieldMetrics();
 
     el.phasePill.style.display = "none";
     el.timer.style.display = "none";
@@ -1460,6 +1486,7 @@
     state.lives = WARMUP.lives;
 
     showScreen(el.game);
+    updatePlayfieldMetrics();
 
     el.phasePill.style.display = "inline-flex";
     el.timer.style.display = "inline-flex";
@@ -1491,6 +1518,7 @@
   function startEndless() {
     resetBase("endless");
     showScreen(el.game);
+    updatePlayfieldMetrics();
 
     setHeaderUI();
     setHint("Endless: промах или таймаут = конец");
@@ -1508,6 +1536,7 @@
 
     state.running = false;
     exitPointerLockSafe();
+    rawFallback.active = false;
     applyRawAimVisuals();
 
     clearTimers();
@@ -1594,13 +1623,30 @@
   el.playfield.addEventListener("pointerdown", (e) => {
     if (!state.running) return;
 
-    // RAW MODE: всегда выстрел (и в pointer lock, и в fallback)
+    // RAW MODE: выстрел
     if (rawSettings.enabled) {
       e.preventDefault();
       ensureAudio();
 
-      // параллельно пробуем залочиться (если можно)
-      if (!rawMouse.locked) enterPointerLockIfEnabled();
+      // Если не в lock — включаем fallback (активируем и запускаем rAF),
+      // чтобы выстрел считался по актуальной позиции.
+      if (!rawMouse.locked) {
+        updatePlayfieldMetrics();
+        rawFallback.active = true;
+
+        const rect = rawFallback.rect;
+        rawFallback.rx = clamp(e.clientX - rect.left, 0, rawFallback.w);
+        rawFallback.ry = clamp(e.clientY - rect.top, 0, rawFallback.h);
+
+        computeFallbackAim();
+        setCrosshairVisible(true);
+        updateCrosshair();
+        startFallbackLoop();
+
+        // параллельно пробуем залочиться
+        enterPointerLockIfEnabled();
+        applyRawAimVisuals();
+      }
 
       const hit = rawShootHitTest();
       if (!hit) registerMiss("click");
@@ -1631,6 +1677,7 @@
   el.homeBtn.addEventListener("click", () => {
     exitPointerLockSafe();
     state.running = false;
+    rawFallback.active = false;
     applyRawAimVisuals();
     showScreen(el.home);
   });
@@ -1638,6 +1685,7 @@
   el.closeBtn.addEventListener("click", () => {
     exitPointerLockSafe();
     state.running = false;
+    rawFallback.active = false;
     applyRawAimVisuals();
     if (tg && typeof tg.close === "function") tgSafe(tg.close.bind(tg));
     else showScreen(el.home);
@@ -1674,8 +1722,18 @@
      Resize safety
      ========================== */
   window.addEventListener("resize", () => {
-    if (rawSettings.enabled && state.running) centerCrosshair();
+    updatePlayfieldMetrics();
+
     if (!state.running) return;
+
+    if (rawSettings.enabled && (rawMouse.locked || rawFallback.active)) {
+      // мягко сохраняем позицию в рамках поля
+      const w = rawFallback.w || 1;
+      const h = rawFallback.h || 1;
+      rawMouse.x = clamp(rawMouse.x, 0, w);
+      rawMouse.y = clamp(rawMouse.y, 0, h);
+      updateCrosshair();
+    }
 
     if (state.mode === "shrink" || state.mode === "falling" || state.mode === "fallshrink") {
       const { w, h } = fieldSize();
