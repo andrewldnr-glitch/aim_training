@@ -1,193 +1,175 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="color-scheme" content="dark light" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>CS Aim Warm-up</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
+
 <body>
 
-  <!-- LOADER OVERLAY (always 2.5s) -->
-  <div id="loader" class="loader" aria-hidden="false">
-    <div class="loader__frame">
-      <div class="brand">
-        <div class="brand__mark" aria-hidden="true">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <circle cx="14" cy="14" r="11" stroke="currentColor" stroke-opacity="0.35" stroke-width="2"/>
-            <circle cx="14" cy="14" r="2.5" fill="currentColor" fill-opacity="0.7"/>
-            <path d="M14 2V7" stroke="currentColor" stroke-opacity="0.55" stroke-width="2" stroke-linecap="round"/>
-            <path d="M14 21V26" stroke="currentColor" stroke-opacity="0.55" stroke-width="2" stroke-linecap="round"/>
-            <path d="M2 14H7" stroke="currentColor" stroke-opacity="0.55" stroke-width="2" stroke-linecap="round"/>
-            <path d="M21 14H26" stroke="currentColor" stroke-opacity="0.55" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="brand__text">
-          <div class="brand__name">CS Aim Warm-up</div>
-          <div class="brand__tag">2–3 минуты до катки</div>
-        </div>
-      </div>
+  <!-- Loader overlay -->
+  <div id="loader" class="loader">
+    <div class="loader-card">
+      <div class="loader-title">CS Aim Warm-up</div>
+      <div class="loader-subtitle">Загрузка…</div>
 
-      <div class="loader__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-        <div id="loaderBar" class="loader__barFill"></div>
+      <div class="progress">
+        <div id="loaderBar" class="progress-bar"></div>
       </div>
-      <div id="loaderPct" class="loader__pct">0%</div>
+      <div id="loaderPct" class="progress-text">0%</div>
     </div>
   </div>
 
   <!-- Toast -->
-  <div id="toast" class="toast" aria-live="polite"></div>
+  <div id="toast" class="toast"> </div>
 
-  <!-- Difficulty Sheet -->
-  <div id="sheetOverlay" class="sheetOverlay hidden" aria-hidden="true">
-    <div class="sheet">
-      <div class="sheet__handle" aria-hidden="true"></div>
-      <div class="sheet__head">
-        <div>
-          <div id="sheetTitle" class="sheet__title">—</div>
-          <div id="sheetSubtitle" class="sheet__sub">—</div>
-        </div>
-        <button id="sheetClose" class="iconBtn" type="button" aria-label="Закрыть">✕</button>
-      </div>
+  <div id="app">
 
-      <div class="sheet__grid">
-        <button class="diffBtn" id="diffEasy">
-          <div class="diffBtn__top">
-            <div class="diffBtn__name">Easy</div>
-            <div id="diffEasyMeta" class="diffBtn__meta">—</div>
-          </div>
-          <div class="diffBtn__desc">Разогрев, комфортный рекорд</div>
-        </button>
-
-        <button class="diffBtn" id="diffMed">
-          <div class="diffBtn__top">
-            <div class="diffBtn__name">Medium</div>
-            <div id="diffMedMeta" class="diffBtn__meta">—</div>
-          </div>
-          <div class="diffBtn__desc">Оптимальная сложность</div>
-        </button>
-
-        <button class="diffBtn" id="diffHard">
-          <div class="diffBtn__top">
-            <div class="diffBtn__name">Hard</div>
-            <div id="diffHardMeta" class="diffBtn__meta">—</div>
-          </div>
-          <div class="diffBtn__desc">Челлендж. Ошибка = поражение</div>
-        </button>
-      </div>
-
-      <div class="sheet__note">
-        Любой промах (клик мимо шара) = поражение. Рекорд сохраняется отдельно по режиму и сложности.
-      </div>
-    </div>
-  </div>
-
-  <div id="app" class="app">
     <!-- HOME -->
-    <section id="home" class="screen screen--center">
-      <header class="homeHeader">
-        <div class="homeHeader__brand">
-          <div class="homeHeader__mark" aria-hidden="true"><span class="dot"></span></div>
-          <div>
-            <div class="homeHeader__title">CS Aim Warm-up</div>
-            <div class="homeHeader__subtitle">Разминка перед каткой — быстро и чисто</div>
-          </div>
-        </div>
-      </header>
+    <section id="home" class="screen active">
+      <h1>CS Aim Warm-up</h1>
+      <p class="subtitle">2–5 минут до катки</p>
 
-      <main class="stack">
-        <div class="card">
-          <div class="card__row">
-            <div class="card__title">Разминка</div>
-            <div class="chip">3:00</div>
-          </div>
-          <div class="card__text">Reaction → Flick → Control. Мягкий режим: <b>3 жизни</b>.</div>
-          <button id="startWarmup" class="btn btn--primary">Начать разминку</button>
+      <div class="home-actions">
+        <button id="startWarmup">Разминка (3:00)</button>
+        <button id="startEndless" class="secondary">Endless (рекорд)</button>
+      </div>
+
+      <div class="home-stats">
+        <div class="stat">
+          <div class="statLabel">Streak</div>
+          <div id="streak" class="statValue">—</div>
+        </div>
+        <div class="stat">
+          <div class="statLabel">Best Endless</div>
+          <div id="best" class="statValue">—</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <h2 class="sectionTitle">Arcade</h2>
+      <div class="mode-grid">
+        <button id="modeShrink" class="modeCard">
+          <div class="modeName">Shrink Arena</div>
+          <div class="modeDesc">OSU-like stream</div>
+        </button>
+
+        <button id="modeFalling" class="modeCard">
+          <div class="modeName">Falling</div>
+          <div class="modeDesc">падают сверху</div>
+        </button>
+
+        <button id="modeFallingShrink" class="modeCard">
+          <div class="modeName">Falling + Shrink</div>
+          <div class="modeDesc">падают + уменьшаются</div>
+        </button>
+      </div>
+
+      <!-- Raw Mouse настройки -->
+      <div class="settings">
+        <label class="toggle">
+          <input type="checkbox" id="rawMouseToggle">
+          Raw mouse (Desktop beta)
+        </label>
+
+        <div class="rangeRow">
+          <span class="rangeLabel">Sens</span>
+          <input id="sensRange" type="range" min="0.30" max="3.00" step="0.05" value="1.00">
+          <span id="sensValue" class="rangeValue">1.00</span>
         </div>
 
-        <div class="card card--ghost">
-          <div class="card__row">
-            <div class="card__title">Endless</div>
-            <div class="chip chip--muted">Рекорд</div>
-          </div>
-          <div class="card__text">Классический челлендж. Промах или таймаут = конец.</div>
-          <button id="startEndless" class="btn btn--secondary">Стартовать Endless</button>
-        </div>
+        <div class="note">Работает на Desktop. На мобильном Telegram может быть недоступно.</div>
+      </div>
 
-        <div class="card card--ghost">
-          <div class="card__row">
-            <div class="card__title">Режимы</div>
-            <div class="chip chip--muted">С выбором сложности</div>
-          </div>
-          <div class="card__text">Новые механики. Для рекордов. Везде промах = поражение.</div>
-
-          <button id="modeShrink" class="btn btn--secondary">Shrink Arena</button>
-          <button id="modeFalling" class="btn btn--secondary">Falling</button>
-          <button id="modeFallingShrink" class="btn btn--secondary">Falling + Shrink</button>
-        </div>
-
-        <div class="statsRow">
-          <div class="stat">
-            <div class="stat__label">Streak</div>
-            <div id="streak" class="stat__value">—</div>
-          </div>
-          <div class="stat">
-            <div class="stat__label">Best (Endless)</div>
-            <div id="best" class="stat__value">—</div>
-          </div>
-        </div>
-
-        <div class="fineprint">
-          by Tvorog 
-        </div>
-      </main>
+      <div class="footerNote">
+        Промах = конец. Разогрев без запуска CS.
+      </div>
     </section>
 
     <!-- GAME -->
-    <section id="game" class="screen screen--game">
-      <header class="gameTop">
-        <button id="quitBtn" class="iconBtn" type="button" aria-label="Закончить">✕</button>
+    <section id="game" class="screen">
+      <header class="topbar">
+        <button id="quitBtn" class="iconBtn" aria-label="Quit">✕</button>
 
-        <div class="gameTop__center">
-          <div id="modePill" class="pill">—</div>
-          <div id="phasePill" class="pill pill--muted">—</div>
+        <div class="pills">
+          <span id="modePill" class="pill">—</span>
+          <span id="phasePill" class="pill pill-ghost">—</span>
         </div>
 
-        <div class="gameTop__right">
-          <div id="lives" class="lives" aria-label="Lives"></div>
-          <div id="timer" class="mono timer"> </div>
-          <div id="score" class="mono score"> </div>
+        <div class="hudRight">
+          <span id="timer" class="hudItem">—</span>
+          <span id="score" class="hudItem">—</span>
+          <span id="lives" class="lives"></span>
         </div>
       </header>
 
-      <div id="playfield" class="playfield" aria-label="Playfield">
-        <div id="pace" class="pace pace--hidden" aria-hidden="true">
-          <div id="paceFill" class="pace__fill"></div>
-        </div>
-        <div class="crosshair" aria-hidden="true"></div>
-        <div id="fieldFlash" class="fieldFlash" aria-hidden="true"></div>
+      <div id="pace" class="pace pace--hidden" aria-hidden="true">
+        <div id="paceFill" class="paceFill"></div>
       </div>
 
-      <div id="hint" class="hint"> </div>
+      <div id="playfield" class="playfield" aria-label="Playfield">
+        <!-- flash overlay -->
+        <div id="fieldFlash" class="fieldFlash" aria-hidden="true"></div>
+
+        <!-- crosshair for Raw mouse -->
+        <div id="crosshair" class="crosshair hidden"></div>
+      </div>
+
+      <div id="hint" class="hint"></div>
     </section>
 
     <!-- RESULT -->
-    <section id="result" class="screen screen--center">
-      <header class="resultHeader">
-        <div id="resultTitle" class="resultTitle">—</div>
-        <div id="resultSubtitle" class="resultSubtitle"> </div>
-      </header>
+    <section id="result" class="screen">
+      <h2 id="resultTitle">—</h2>
+      <p id="resultSubtitle" class="subtitle">—</p>
 
-      <div id="resultStats" class="resultStats"></div>
+      <div id="resultStats" class="result-stats"></div>
 
-      <div class="resultActions">
-        <button id="replayBtn" class="btn btn--primary">Повторить</button>
-        <button id="homeBtn" class="btn btn--secondary">На главную</button>
-        <button id="closeBtn" class="btn btn--ghost" type="button">Закрыть</button>
+      <div class="result-actions">
+        <button id="replayBtn">Ещё</button>
+        <button id="homeBtn" class="secondary">На главную</button>
+        <button id="closeBtn" class="secondary">Закрыть</button>
       </div>
     </section>
+
+  </div>
+
+  <!-- Difficulty Sheet Overlay -->
+  <div id="sheetOverlay" class="sheetOverlay hidden" aria-hidden="true">
+    <div class="sheet">
+      <div class="sheetHeader">
+        <div>
+          <div id="sheetTitle" class="sheetTitle">—</div>
+          <div id="sheetSubtitle" class="sheetSubtitle">—</div>
+        </div>
+        <button id="sheetClose" class="iconBtn" aria-label="Close">✕</button>
+      </div>
+
+      <div class="diffGrid">
+        <button id="diffEasy" class="diffCard">
+          <div class="diffName">Easy</div>
+          <div id="diffEasyMeta" class="diffMeta">—</div>
+        </button>
+
+        <button id="diffMed" class="diffCard">
+          <div class="diffName">Med</div>
+          <div id="diffMedMeta" class="diffMeta">—</div>
+        </button>
+
+        <button id="diffHard" class="diffCard">
+          <div class="diffName">Hard</div>
+          <div id="diffHardMeta" class="diffMeta">—</div>
+        </button>
+      </div>
+
+      <div class="sheetFoot">
+        Любой промах = поражение. Рекорды сохраняются локально.
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>
