@@ -8,10 +8,25 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
+
+  <!-- LOADER OVERLAY -->
+  <div id="loader" class="loader">
+    <div class="loader-card">
+      <div class="loader-title">CS Aim Warm-up</div>
+      <div class="loader-subtitle">Загрузка…</div>
+
+      <div class="progress">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+
+      <div id="progressText" class="progress-text">0%</div>
+    </div>
+  </div>
+
   <div id="app">
 
     <!-- HOME -->
-    <div id="home" class="screen active">
+    <div id="home" class="screen">
       <h1>CS Aim Warm-up</h1>
       <p class="subtitle">Разминка перед каткой</p>
 
@@ -19,23 +34,25 @@
       <button id="startEndless" class="secondary">Бесконечный режим</button>
 
       <div class="streak" id="streak"></div>
+      <div class="best" id="best"></div>
     </div>
 
     <!-- GAME -->
     <div id="game" class="screen">
       <div class="hud">
-        <span id="modeLabel"></span>
-        <span id="timer"></span>
-        <span id="score"></span>
+        <span id="modeLabel">—</span>
+        <span id="timer"> </span>
+        <span id="score"> </span>
       </div>
-      <div id="playfield"></div>
+      <div id="playfield" aria-label="Playfield"></div>
+      <div class="hint">Промах = конец</div>
     </div>
 
     <!-- RESULT -->
     <div id="result" class="screen">
       <h2 id="resultTitle"></h2>
-      <div id="resultStats"></div>
-      <button id="backHome">Ок</button>
+      <div id="resultStats" class="result-stats"></div>
+      <button id="backHome">На главную</button>
     </div>
 
   </div>
