@@ -110,7 +110,7 @@
      ========== */
   let toastTimer = null;
   function toast(msg) {
-    if (!msg) return;
+    if (!msg || !el.toast) return;
     el.toast.textContent = msg;
     el.toast.classList.add("show");
     clearTimeout(toastTimer);
@@ -209,6 +209,34 @@
     lastTrainingDay: "csaim.lastTrainingDay",
   };
 
+  /* ==========
+     Raw mouse settings (Pointer Lock + fallback)
+     ========== */
+  const RAW_KEYS = {
+    enabled: "csaim.rawMouse",
+    sens: "csaim.rawSens",
+  };
+
+  const isCoarsePointer = (() => {
+    try { return window.matchMedia && window.matchMedia("(pointer: coarse)").matches; }
+    catch { return false; }
+  })();
+
+  const rawSettings = {
+    enabled: store.get(RAW_KEYS.enabled, "0") === "1",
+    sens: (() => {
+      const v = Number(store.get(RAW_KEYS.sens, "1.00"));
+      return Number.isFinite(v) ? v : 1.0;
+    })(),
+  };
+
+  const rawUI = {
+    toggle: $("rawMouseToggle"),
+    range: $("sensRange"),
+    value: $("sensValue"),
+    crosshair: $("crosshair"),
+  };
+
   function bestKey(mode, diff) {
     return `csaim.best.${mode}.${diff}`;
   }
@@ -244,8 +272,8 @@
   function updateHomeStats() {
     const streak = Number(store.get(KEYS.streak, "0"));
     const best = Number(store.get(KEYS.bestEndless, "0"));
-    el.streak.textContent = streak ? `🔥 ${streak}` : "—";
-    el.best.textContent = best ? `${best}` : "—";
+    if (el.streak) el.streak.textContent = streak ? `🔥 ${streak}` : "—";
+    if (el.best) el.best.textContent = best ? `${best}` : "—";
   }
 
   /* ==========
@@ -256,14 +284,14 @@
     function tick(now) {
       const t = Math.min(1, (now - start) / ms);
       const pct = Math.round(t * 100);
-      el.loaderBar.style.width = `${pct}%`;
-      el.loaderPct.textContent = `${pct}%`;
+      if (el.loaderBar) el.loaderBar.style.width = `${pct}%`;
+      if (el.loaderPct) el.loaderPct.textContent = `${pct}%`;
 
       if (t < 1) requestAnimationFrame(tick);
       else {
-        el.loader.classList.add("done");
+        if (el.loader) el.loader.classList.add("done");
         setTimeout(() => {
-          el.loader.style.display = "none";
+          if (el.loader) el.loader.style.display = "none";
           showScreen(el.home);
         }, 240);
       }
@@ -287,10 +315,12 @@
   }
 
   function setPaceHidden(hidden) {
+    if (!el.pace) return;
     el.pace.classList.toggle("pace--hidden", !!hidden);
   }
 
   function animatePace(ms) {
+    if (!el.paceFill) return;
     setPaceHidden(false);
     el.paceFill.style.transition = "none";
     el.paceFill.style.width = "100%";
@@ -300,10 +330,186 @@
   }
 
   function flashMiss() {
-    el.fieldFlash.style.opacity = "1";
+    if (el.fieldFlash) el.fieldFlash.style.opacity = "1";
     el.playfield.classList.add("shake");
-    setTimeout(() => { el.fieldFlash.style.opacity = "0"; }, 160);
+    setTimeout(() => { if (el.fieldFlash) el.fieldFlash.style.opacity = "0"; }, 160);
     setTimeout(() => { el.playfield.classList.remove("shake"); }, 240);
+  }
+
+  /* ==========================
+     Raw mouse engine
+     ========================== */
+  const rawMouse = {
+    locked: false, // pointer lock active
+    x: 0,
+    y: 0,
+    softActive: false, // fallback tracking active
+    lastClientX: 0,
+    lastClientY: 0,
+  };
+
+  function setCrosshairVisible(on) {
+    if (!rawUI.crosshair) return;
+    rawUI.crosshair.classList.toggle("hidden", !on);
+  }
+
+  function updateCrosshair() {
+    if (!rawUI.crosshair) return;
+    rawUI.crosshair.style.left = `${rawMouse.x}px`;
+    rawUI.crosshair.style.top = `${rawMouse.y}px`;
+  }
+
+  function centerCrosshair() {
+    const { w, h } = fieldSize();
+    rawMouse.x = w / 2;
+    rawMouse.y = h / 2;
+    updateCrosshair();
+  }
+
+  function pointerLockSupported() {
+    return !!(document.pointerLockElement !== undefined
+      && el.playfield
+      && typeof el.playfield.requestPointerLock === "function");
+  }
+
+  function exitPointerLockSafe() {
+    try {
+      if (document.pointerLockElement) document.exitPointerLock?.();
+    } catch (_) {}
+  }
+
+  function enterPointerLockIfEnabled() {
+    if (!rawSettings.enabled) return;
+
+    if (!pointerLockSupported()) return; // fallback всё равно будет работать
+
+    try {
+      el.playfield.requestPointerLock();
+    } catch (_) {}
+  }
+
+  function applyRawAimVisuals() {
+    const on = !!(rawSettings.enabled && state.running);
+    if (el.playfield) el.playfield.classList.toggle("rawAim", on);
+    if (!on) {
+      setCrosshairVisible(false);
+      rawMouse.softActive = false;
+      return;
+    }
+    // в raw-режиме прицел нужен всегда (и в lock, и в fallback)
+    setCrosshairVisible(true);
+    if (!rawMouse.locked && !rawMouse.softActive) centerCrosshair();
+  }
+
+  document.addEventListener("pointerlockchange", () => {
+    rawMouse.locked = (document.pointerLockElement === el.playfield);
+    // если залочились — сбрасываем soft
+    if (rawMouse.locked) {
+      rawMouse.softActive = false;
+      centerCrosshair();
+      toast("Raw mouse: ON (Esc — выйти)");
+    }
+    applyRawAimVisuals();
+  });
+
+  // Pointer Lock movement (real raw deltas)
+  document.addEventListener("mousemove", (e) => {
+    if (!rawMouse.locked) return;
+    const { w, h } = fieldSize();
+    rawMouse.x = clamp(rawMouse.x + e.movementX * rawSettings.sens, 0, w);
+    rawMouse.y = clamp(rawMouse.y + e.movementY * rawSettings.sens, 0, h);
+    updateCrosshair();
+  });
+
+  // Fallback: software-raw (если pointer lock недоступен/отключён)
+  if (el.playfield) {
+    el.playfield.addEventListener("mouseenter", () => {
+      if (!rawSettings.enabled || rawMouse.locked || !state.running) return;
+      rawMouse.softActive = false; // включится на первом mousemove
+      applyRawAimVisuals();
+    });
+
+    el.playfield.addEventListener("mouseleave", () => {
+      if (!rawSettings.enabled || rawMouse.locked) return;
+      rawMouse.softActive = false;
+      // при уходе мыши с поля — скрываем, чтобы не выглядело странно
+      setCrosshairVisible(false);
+    });
+
+    el.playfield.addEventListener("mousemove", (e) => {
+      if (!rawSettings.enabled || rawMouse.locked || !state.running) return;
+
+      const rect = el.playfield.getBoundingClientRect();
+      const { w, h } = fieldSize();
+
+      // первая инициализация — ставим прицел туда, где мышь
+      if (!rawMouse.softActive) {
+        rawMouse.softActive = true;
+        rawMouse.lastClientX = e.clientX;
+        rawMouse.lastClientY = e.clientY;
+
+        rawMouse.x = clamp(e.clientX - rect.left, 0, w);
+        rawMouse.y = clamp(e.clientY - rect.top, 0, h);
+        setCrosshairVisible(true);
+        updateCrosshair();
+        return;
+      }
+
+      // дальше — двигаем прицел по дельтам * sens
+      const dx = e.clientX - rawMouse.lastClientX;
+      const dy = e.clientY - rawMouse.lastClientY;
+      rawMouse.lastClientX = e.clientX;
+      rawMouse.lastClientY = e.clientY;
+
+      rawMouse.x = clamp(rawMouse.x + dx * rawSettings.sens, 0, w);
+      rawMouse.y = clamp(rawMouse.y + dy * rawSettings.sens, 0, h);
+      setCrosshairVisible(true);
+      updateCrosshair();
+    });
+  }
+
+  function initRawUI() {
+    if (rawUI.toggle) {
+      rawUI.toggle.checked = rawSettings.enabled;
+
+      rawUI.toggle.addEventListener("change", () => {
+        // на мобиле отключаем — иначе будет ломать UX
+        if (rawUI.toggle.checked && isCoarsePointer) {
+          rawUI.toggle.checked = false;
+          rawSettings.enabled = false;
+          store.set(RAW_KEYS.enabled, "0");
+          toast("Raw mouse только для Desktop");
+          return;
+        }
+
+        rawSettings.enabled = !!rawUI.toggle.checked;
+        store.set(RAW_KEYS.enabled, rawSettings.enabled ? "1" : "0");
+
+        if (!rawSettings.enabled) {
+          exitPointerLockSafe();
+          setCrosshairVisible(false);
+          if (el.playfield) el.playfield.classList.remove("rawAim");
+        } else {
+          // если уже в игре — включаем visuals и пробуем lock
+          if (state.running) {
+            applyRawAimVisuals();
+            enterPointerLockIfEnabled();
+          }
+        }
+      });
+    }
+
+    if (rawUI.range) {
+      rawUI.range.value = String(rawSettings.sens.toFixed(2));
+      if (rawUI.value) rawUI.value.textContent = rawSettings.sens.toFixed(2);
+
+      rawUI.range.addEventListener("input", () => {
+        const v = clamp(Number(rawUI.range.value), 0.3, 3.0);
+        rawSettings.sens = v;
+        store.set(RAW_KEYS.sens, v.toFixed(2));
+        if (rawUI.value) rawUI.value.textContent = v.toFixed(2);
+      });
+    }
   }
 
   /* ==========================
@@ -361,8 +567,8 @@
     pendingMode = null;
   }
 
-  el.sheetClose.addEventListener("click", closeSheet);
-  el.sheetOverlay.addEventListener("click", (e) => {
+  if (el.sheetClose) el.sheetClose.addEventListener("click", closeSheet);
+  if (el.sheetOverlay) el.sheetOverlay.addEventListener("click", (e) => {
     if (e.target === el.sheetOverlay) closeSheet();
   });
 
@@ -383,7 +589,6 @@
      Arcade Config
      ========================== */
   const ARCADE = {
-    // Shrink Arena: OSU-like stream
     shrink: {
       easy: { maxActive: 3, baseSize: 58, minSize: 12, shrinkTimeMs: 3200, spawnEveryMs: 650, jitterMs: 260 },
       med:  { maxActive: 4, baseSize: 54, minSize: 12, shrinkTimeMs: 2700, spawnEveryMs: 520, jitterMs: 210 },
@@ -409,39 +614,32 @@
     diff: null,        // easy | med | hard
     running: false,
 
-    // warmup
     totalLeft: 0,
     phaseIndex: 0,
     phaseLeft: 0,
     lives: 0,
 
-    // common stats
     hits: 0,
     misses: 0,
 
-    // warmup stats
     reactionMs: [],
     flickMs: [],
     controlHits: 0,
 
-    // warmup target
     targetEl: null,
     spawnedAt: 0,
     targetLifeId: null,
     spawnDelayId: null,
 
-    // warmup moving
     rafId: null,
     lastRaf: 0,
     vel: { x: 0, y: 0 },
 
-    // arcade objects
     objects: [],
     arcadeRaf: null,
     lastArcade: 0,
 
-    // spawn scheduler can be interval or timeout
-    spawnJob: null, // { id, type: "interval" | "timeout" }
+    spawnJob: null,
   };
 
   let tickId = null;
@@ -484,9 +682,10 @@
     state.objects = [];
   }
 
-  function setHint(text) { el.hint.textContent = text || ""; }
+  function setHint(text) { if (el.hint) el.hint.textContent = text || ""; }
 
   function renderLives() {
+    if (!el.lives) return;
     el.lives.innerHTML = "";
     for (let i = 0; i < WARMUP.lives; i++) {
       const dot = document.createElement("div");
@@ -518,7 +717,7 @@
       el.timer.style.display = "none";
       el.score.style.display = "inline-flex";
       el.score.textContent = `Score ${state.hits}`;
-      el.lives.innerHTML = "";
+      if (el.lives) el.lives.innerHTML = "";
       setPaceHidden(false);
       return;
     }
@@ -535,7 +734,7 @@
       el.timer.style.display = "none";
       el.score.style.display = "inline-flex";
       el.score.textContent = `Score ${state.hits}`;
-      el.lives.innerHTML = "";
+      if (el.lives) el.lives.innerHTML = "";
       setPaceHidden(true);
     }
   }
@@ -605,7 +804,10 @@
     const pos = randomPos(size);
     setTargetPos(t, pos.x, pos.y);
 
+    // ВАЖНО: если включен raw mouse — НЕ даём кликать по цели напрямую.
+    // Клик должен идти в playfield как "выстрел", чтобы sens работал.
     t.addEventListener("pointerdown", (e) => {
+      if (rawSettings.enabled) return; // дать событию всплыть
       e.preventDefault();
       e.stopPropagation();
       onHit();
@@ -693,19 +895,25 @@
       ? (size - minSize) / shrinkTimeMs
       : 0;
 
+    const id = (window.crypto && typeof window.crypto.randomUUID === "function")
+      ? window.crypto.randomUUID()
+      : String(Math.random());
+
     const obj = {
-      id: (crypto?.randomUUID ? crypto.randomUUID() : String(Math.random())),
+      id,
       el: b,
       x, y,
       size,
-      vy, // px/ms
+      vy,
       minSize,
-      shrinkRate, // px/ms
+      shrinkRate,
       kind,
       alive: true,
     };
 
+    // В raw-режиме НЕ даём кликать напрямую
     b.addEventListener("pointerdown", (e) => {
+      if (rawSettings.enabled) return; // пусть всплывает в playfield (выстрел)
       e.preventDefault();
       e.stopPropagation();
       arcadeHit(obj);
@@ -726,7 +934,6 @@
     playHitSound();
     Haptic.light();
 
-    // В arcade-режимах: 1 клик = убрать цель + очко
     removeBall(obj);
     state.hits += 1;
     el.score.textContent = `Score ${state.hits}`;
@@ -747,10 +954,53 @@
   }
 
   /* ==========================
+     Raw shoot hit-test
+     ========================== */
+  function pointInCircle(px, py, cx, cy, r) {
+    const dx = px - cx;
+    const dy = py - cy;
+    return (dx * dx + dy * dy) <= (r * r);
+  }
+
+  function rawShootHitTest() {
+    const px = rawMouse.x;
+    const py = rawMouse.y;
+
+    if ((state.mode === "warmup" || state.mode === "endless") && state.targetEl) {
+      const rect = state.targetEl.getBoundingClientRect();
+      const fieldRect = el.playfield.getBoundingClientRect();
+
+      const cx = (rect.left - fieldRect.left) + rect.width / 2;
+      const cy = (rect.top - fieldRect.top) + rect.height / 2;
+      const r = rect.width / 2;
+
+      if (pointInCircle(px, py, cx, cy, r)) {
+        onHit();
+        return true;
+      }
+      return false;
+    }
+
+    if (state.mode === "shrink" || state.mode === "falling" || state.mode === "fallshrink") {
+      for (const o of state.objects) {
+        if (!o.alive) continue;
+        const cx = o.x + o.size / 2;
+        const cy = o.y + o.size / 2;
+        const r = o.size / 2;
+        if (pointInCircle(px, py, cx, cy, r)) {
+          arcadeHit(o);
+          return true;
+        }
+      }
+      return false;
+    }
+
+    return false;
+  }
+
+  /* ==========================
      Shrink Arena (OSU-like stream)
      ========================== */
-
-  // Позиции "как osu": не спавним слишком близко к другим целям.
   function pickOsuPos(size) {
     const { w, h } = fieldSize();
     const margin = 6;
@@ -801,7 +1051,6 @@
       kind: "shrink"
     });
 
-    // мягкий “pop-in”
     obj.el.style.opacity = "0";
     obj.el.style.transform = "scale(0.92)";
     obj.el.style.transition = "opacity 120ms ease, transform 120ms ease";
@@ -830,13 +1079,13 @@
 
     el.phasePill.style.display = "none";
     el.timer.style.display = "none";
-    el.lives.innerHTML = "";
+    if (el.lives) el.lives.innerHTML = "";
     setHeaderUI();
 
-    const p = ARCADE.shrink[diff];
     setHint("OSU-стрим: цели появляются постепенно. Успей нажать до исчезновения. Промах = поражение.");
 
-    // Поток спавна: живой ритм (jitter + иногда быстрая пара)
+    const p = ARCADE.shrink[diff];
+
     const scheduleNext = () => {
       if (!state.running || state.mode !== "shrink") return;
 
@@ -845,17 +1094,13 @@
 
       const jitter = (Math.random() * 2 - 1) * p.jitterMs;
       let next = Math.max(140, p.spawnEveryMs + jitter);
-
-      // шанс на быструю “двойку”
       if (Math.random() < 0.12) next *= 0.62;
 
       setSpawnTimeout(scheduleNext, next);
     };
 
-    // стартовая пауза
     setSpawnTimeout(scheduleNext, 220);
 
-    // RAF: shrink + check (исчез = поражение)
     state.lastArcade = performance.now();
     state.arcadeRaf = requestAnimationFrame(function loop(now) {
       if (!state.running || state.mode !== "shrink") return;
@@ -880,7 +1125,6 @@
           const delta = old - next;
           obj.size = next;
 
-          // держим центр при shrink
           obj.x += delta / 2;
           obj.y += delta / 2;
 
@@ -897,6 +1141,9 @@
       state.objects = state.objects.filter(o => o.alive);
       state.arcadeRaf = requestAnimationFrame(loop);
     });
+
+    applyRawAimVisuals();
+    enterPointerLockIfEnabled();
   }
 
   /* ==========================
@@ -939,7 +1186,7 @@
 
     el.phasePill.style.display = "none";
     el.timer.style.display = "none";
-    el.lives.innerHTML = "";
+    if (el.lives) el.lives.innerHTML = "";
     setHeaderUI();
 
     const p = ARCADE.falling[diff];
@@ -975,6 +1222,9 @@
       state.objects = state.objects.filter(o => o.alive);
       state.arcadeRaf = requestAnimationFrame(loop);
     });
+
+    applyRawAimVisuals();
+    enterPointerLockIfEnabled();
   }
 
   /* ==========================
@@ -1017,7 +1267,7 @@
 
     el.phasePill.style.display = "none";
     el.timer.style.display = "none";
-    el.lives.innerHTML = "";
+    if (el.lives) el.lives.innerHTML = "";
     setHeaderUI();
 
     const p = ARCADE.fallshrink[diff];
@@ -1040,10 +1290,8 @@
       for (const obj of state.objects) {
         if (!obj.alive) continue;
 
-        // fall
         obj.y += obj.vy * dt;
 
-        // shrink
         if (obj.shrinkRate > 0) {
           const old = obj.size;
           const next = old - obj.shrinkRate * dt;
@@ -1080,6 +1328,9 @@
       state.objects = state.objects.filter(o => o.alive);
       state.arcadeRaf = requestAnimationFrame(loop);
     });
+
+    applyRawAimVisuals();
+    enterPointerLockIfEnabled();
   }
 
   /* ==========================
@@ -1126,13 +1377,11 @@
   function registerMiss(reason = "miss") {
     if (!state.running) return;
 
-    // Arcade: клик по пустоте = поражение
     if (state.mode === "shrink" || state.mode === "falling" || state.mode === "fallshrink") {
       arcadeDefeat("empty");
       return;
     }
 
-    // Warmup: in reaction phase ignore early click if no target yet
     if (state.mode === "warmup") {
       const ph = currentPhase();
       if (ph?.key === "reaction" && !state.targetEl && reason === "click") {
@@ -1208,6 +1457,9 @@
     setHeaderUI();
     startPhase(0);
 
+    applyRawAimVisuals();
+    enterPointerLockIfEnabled();
+
     tickId = setInterval(() => {
       if (!state.running || state.mode !== "warmup") return;
 
@@ -1235,18 +1487,23 @@
     const p = endlessParams(0);
     spawnSingleTarget({ size: p.size, lifetimeMs: p.lifetimeMs, moving: p.moving, speed: p.speed, withPace: true });
     el.score.textContent = `Score ${state.hits}`;
+
+    applyRawAimVisuals();
+    enterPointerLockIfEnabled();
   }
 
   function endSession(title) {
     if (!state.running) return;
 
     state.running = false;
+    exitPointerLockSafe();
+    applyRawAimVisuals();
+
     clearTimers();
     clearTarget();
     clearArcadeObjects();
     stopMotion();
 
-    // Save best
     if (state.mode === "endless") {
       const best = Number(store.get(KEYS.bestEndless, "0"));
       store.set(KEYS.bestEndless, String(Math.max(best, state.hits)));
@@ -1262,7 +1519,6 @@
     updateHomeStats();
 
     el.resultTitle.textContent = title || "Готово";
-
     if (state.mode === "warmup") el.resultSubtitle.textContent = "Разогрелся. Дальше — катка.";
     else if (state.mode === "endless") el.resultSubtitle.textContent = "Ещё попытка — и будет выше.";
     else el.resultSubtitle.textContent = "Жёстко. Но рекорды именно так и делаются.";
@@ -1322,10 +1578,25 @@
   }
 
   /* ==========================
-     Input (miss)
+     Input: click / shoot
      ========================== */
-  el.playfield.addEventListener("pointerdown", () => {
+  el.playfield.addEventListener("pointerdown", (e) => {
     if (!state.running) return;
+
+    // RAW MODE: всегда выстрел (и в pointer lock, и в fallback)
+    if (rawSettings.enabled) {
+      e.preventDefault();
+      ensureAudio();
+
+      // параллельно пробуем залочиться (если можно)
+      if (!rawMouse.locked) enterPointerLockIfEnabled();
+
+      const hit = rawShootHitTest();
+      if (!hit) registerMiss("click");
+      return;
+    }
+
+    // обычный режим
     registerMiss("click");
   });
 
@@ -1346,9 +1617,17 @@
     else if (state.mode === "fallshrink") startFallingShrink(state.diff);
   });
 
-  el.homeBtn.addEventListener("click", () => showScreen(el.home));
+  el.homeBtn.addEventListener("click", () => {
+    exitPointerLockSafe();
+    state.running = false;
+    applyRawAimVisuals();
+    showScreen(el.home);
+  });
 
   el.closeBtn.addEventListener("click", () => {
+    exitPointerLockSafe();
+    state.running = false;
+    applyRawAimVisuals();
     if (tg && typeof tg.close === "function") tgSafe(tg.close.bind(tg));
     else showScreen(el.home);
   });
@@ -1384,6 +1663,7 @@
      Resize safety
      ========================== */
   window.addEventListener("resize", () => {
+    if (rawSettings.enabled && state.running) centerCrosshair();
     if (!state.running) return;
 
     if (state.mode === "shrink" || state.mode === "falling" || state.mode === "fallshrink") {
@@ -1415,6 +1695,7 @@
      ========================== */
   applyTelegramTheme();
   updateHomeStats();
+  initRawUI();
   showScreen(el.home);
   runLoader(2500);
 
