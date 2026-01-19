@@ -489,3 +489,95 @@ body::before{
   pointer-events:none;
   transition: opacity 220ms ease;
 }
+/* ===========================
+   Difficulty Sheet
+   =========================== */
+.sheetOverlay{
+  position: fixed;
+  inset: 0;
+  z-index: 9997;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 14px 14px calc(14px + var(--safeB));
+  backdrop-filter: blur(10px);
+}
+
+.sheetOverlay.hidden{ display: none; }
+
+.sheet{
+  width: min(720px, 96vw);
+  border-radius: 22px;
+  background: rgba(14,14,18,0.94);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 28px 90px rgba(0,0,0,0.75);
+  padding: 12px;
+  animation: sheetIn 180ms ease-out;
+}
+
+@keyframes sheetIn{
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0px); opacity: 1; }
+}
+
+.sheet__handle{
+  width: 56px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.14);
+  margin: 4px auto 10px;
+}
+
+.sheet__head{
+  display:flex;
+  justify-content: space-between;
+  align-items:flex-start;
+  gap: 12px;
+  padding: 2px 2px 10px;
+}
+
+.sheet__title{ font-weight: 900; font-size: 16px; }
+.sheet__sub{ margin-top: 4px; font-size: 13px; color: var(--muted); }
+
+.sheet__grid{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+@media (min-width: 640px){
+  .sheet__grid{ grid-template-columns: 1fr 1fr 1fr; }
+}
+
+.diffBtn{
+  text-align:left;
+  border-radius: 18px;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.92);
+  cursor:pointer;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+.diffBtn:active{ transform: scale(0.99); }
+@media (hover:hover){
+  .diffBtn:hover{ filter: brightness(1.06); }
+}
+
+.diffBtn__top{ display:flex; justify-content: space-between; align-items:center; gap: 10px; }
+.diffBtn__name{ font-weight: 900; font-size: 14px; }
+.diffBtn__meta{ color: rgba(255,255,255,0.70); font-size: 12px; }
+.diffBtn__desc{ margin-top: 8px; color: rgba(255,255,255,0.60); font-size: 12px; line-height: 1.35; }
+
+.sheet__note{
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.70);
+  font-size: 12px;
+}
+
